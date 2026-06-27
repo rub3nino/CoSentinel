@@ -1,12 +1,12 @@
 {
   "/Users/ruben/Progetti/CoSentinel/server.py": {
-    "mtime": 1782552918.5659714,
-    "ast_hash": "6d3aa8ca11f821316064502e033da6ac",
+    "mtime": 1782558964.2559972,
+    "ast_hash": "3719d3dfc4ce560f8447b9313f630d47",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/config.py": {
-    "mtime": 1782550394.0988758,
-    "ast_hash": "36b6e2e5d0dd85060750ef0726e450d2",
+    "mtime": 1782558931.6563616,
+    "ast_hash": "d13e5a63d5318f9ca0ca4db07b087000",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/models.py": {
@@ -15,13 +15,13 @@
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/agent.py": {
-    "mtime": 1782550065.237975,
-    "ast_hash": "03838a354877b1075d3110b9075c2d56",
+    "mtime": 1782557975.494685,
+    "ast_hash": "1b429d3cc214eb573c7120cb2e2db174",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/fetcher.py": {
-    "mtime": 1782550077.670313,
-    "ast_hash": "a930c3884bc4dc1e49dd342e053738d0",
+    "mtime": 1782559136.810101,
+    "ast_hash": "ea1f4295af6bb49e0599f63521065a03",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/.codex/hooks.json": {
@@ -90,23 +90,23 @@
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/static/index.html": {
-    "mtime": 1782553412.8434002,
-    "ast_hash": "892d6b85c22d3a7f6271b0c7b0b10994",
+    "mtime": 1782559343.6843486,
+    "ast_hash": "1253837a4e16c668e6e25c1ef7cf2d58",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/scan_service.py": {
-    "mtime": 1782553194.6011345,
-    "ast_hash": "41ea3fcb6eb0248ba832a27207af0eb2",
+    "mtime": 1782558983.8664486,
+    "ast_hash": "7acf742fef08ba56e1e26c08d4607678",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/tests/test_backend_smoke.py": {
-    "mtime": 1782553244.2195468,
-    "ast_hash": "1abd2114eb57fda596903d825b09e8c8",
+    "mtime": 1782559000.8529046,
+    "ast_hash": "1f9be64530351f3578c1a42dca026a86",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/README.md": {
-    "mtime": 1782551270.6221178,
-    "ast_hash": "f3b36f6bc5c5fec8de0ca148aa5aad91",
+    "mtime": 1782559309.315532,
+    "ast_hash": "3d9137fa09ca973cd52c2c0cebba71e7",
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/UI_UX_PLAN.md": {
@@ -115,8 +115,128 @@
     "semantic_hash": ""
   },
   "/Users/ruben/Progetti/CoSentinel/tests/test_server_http.py": {
-    "mtime": 1782553438.9244478,
-    "ast_hash": "201f91390c98b0402825d91456cdd828",
+    "mtime": 1782557981.8031266,
+    "ast_hash": "b27234df5b59ebffe69b71fe0bc38345",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/static/index.backup.html": {
+    "mtime": 1782553666.22627,
+    "ast_hash": "892d6b85c22d3a7f6271b0c7b0b10994",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/exposure.py": {
+    "mtime": 1782555969.8711474,
+    "ast_hash": "282500beefc90611d3374d9cd018a044",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/COSENTINEL (1).svg": {
+    "mtime": 1782555585.6108673,
+    "ast_hash": "ec55f6469b0960b4fd1ed7197f237969",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/static/COSENTINEL.svg": {
+    "mtime": 1782555668.2368255,
+    "ast_hash": "ec55f6469b0960b4fd1ed7197f237969",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/network.py": {
+    "mtime": 1782559401.3161607,
+    "ast_hash": "5bbf57614a340a0490e9b3ec2e31d850",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/attack_graph.py": {
+    "mtime": 1782559328.5611963,
+    "ast_hash": "d18707b0570dfc456be72e6542b5f336",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/routes.py": {
+    "mtime": 1782557745.3714144,
+    "ast_hash": "03b15ff609b18eea7bed5c0591ec445b",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/auth.py": {
+    "mtime": 1782557965.4317253,
+    "ast_hash": "601d5068aa3a1ec875af4bc723dad0f7",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/targets.py": {
+    "mtime": 1782557960.633775,
+    "ast_hash": "227f194b50acb82b6cddc49aa562871a",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/crtsh.py": {
+    "mtime": 1782558519.4599254,
+    "ast_hash": "43f7babe71668fb8d5ef45e8f608fde2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/trivy.py": {
+    "mtime": 1782558515.8933537,
+    "ast_hash": "42841210a09c5748e092da9ed588b43b",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/semgrep.py": {
+    "mtime": 1782558918.2104027,
+    "ast_hash": "5b94ac3f6f63d3d1a69f0c20becf7134",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/github_actions.py": {
+    "mtime": 1782559040.8175411,
+    "ast_hash": "190eab63cab3dd863b5e3f5873539e19",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/wayback.py": {
+    "mtime": 1782558931.1100044,
+    "ast_hash": "bfaaab1e9732cb03a86d422e6e8dd873",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/last_demo_scan.json": {
+    "mtime": 1782559290.799334,
+    "ast_hash": "291d9606e358e64a58b83bb2a96369a2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/settings.py": {
+    "mtime": 1782559123.0283308,
+    "ast_hash": "713ba948688a8a596b16e7b258ab8312",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/app.py": {
+    "mtime": 1782559123.699485,
+    "ast_hash": "bd762232ae52ab412648f0683d465d2d",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scripts/run_demo_scan.py": {
+    "mtime": 1782559129.1129758,
+    "ast_hash": "5caf97c1cfa7ecb9e722ca4f9f373b4c",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/DEMO.md": {
+    "mtime": 1782559139.704513,
+    "ast_hash": "10c506a1ccdfc12932237d7df800b3be",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/last_demo_report.md": {
+    "mtime": 1782559290.7995732,
+    "ast_hash": "cd9a1a82c7610f1dc434c477cb0ba319",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/requirements.txt": {
+    "mtime": 1782559122.92837,
+    "ast_hash": "a94190bf4b2461b6ad673b4018f7fd98",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/README.md": {
+    "mtime": 1782559122.6525934,
+    "ast_hash": "a3a2702053f0943d31100890efe034d2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/docker-compose.yml": {
+    "mtime": 1782559122.7676337,
+    "ast_hash": "e459c1b70532ec9d5d174b44d686f0a2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/demo/cosentinel-vuln-demo/.github/workflows/ci.yml": {
+    "mtime": 1782559124.3052473,
+    "ast_hash": "2166f6bad3642953de1e60f883aa2509",
     "semantic_hash": ""
   }
 }

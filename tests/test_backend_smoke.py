@@ -13,11 +13,15 @@ import scan_service
 import server
 import pr_creator
 from models import Finding, Severity
-from scanners import auth, code, config_audit, deps, exposure, routes, secrets, targets
+from scanners import auth, code, config_audit, crtsh, deps, exposure, github_actions, routes, secrets, semgrep, targets, trivy, wayback
 
 _REAL_SCAN_ROUTES = routes.scan_routes
 _REAL_SCAN_TARGETS = targets.scan_targets
 _REAL_SCAN_AUTH = auth.scan_auth
+_REAL_SCAN_TRIVY = trivy.scan_dockerfiles
+_REAL_SCAN_CRTSH = crtsh.scan_crtsh
+_REAL_SCAN_GHA = github_actions.scan_github_actions
+_REAL_SCAN_WAYBACK = wayback.scan_wayback
 
 
 class BackendSmokeTest(unittest.TestCase):
@@ -35,6 +39,11 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(routes, "scan_routes", lambda local_path, all_files: [])
         self._patch(targets, "scan_targets", lambda local_path, all_files: [])
         self._patch(auth, "scan_auth", lambda local_path, all_files: [])
+        self._patch(trivy, "scan_dockerfiles", lambda local_path, all_files: [])
+        self._patch(crtsh, "scan_crtsh", lambda domains: [])
+        self._patch(github_actions, "scan_github_actions", lambda local_path, all_files: [])
+        self._patch(semgrep, "scan_semgrep", lambda local_path: [])
+        self._patch(wayback, "scan_wayback", lambda domains: [])
 
     def tearDown(self):
         for obj, name, value in reversed(self._patches):
@@ -93,6 +102,12 @@ class BackendSmokeTest(unittest.TestCase):
         self.assertIn("routes", health["scanners"])
         self.assertIn("targets", health["scanners"])
         self.assertIn("auth", health["scanners"])
+        self.assertIn("trivy", health["scanners"])
+        self.assertIn("crtsh", health["scanners"])
+        self.assertIn("github_actions", health["scanners"])
+        self.assertIn("wayback", health["scanners"])
+        self.assertFalse(health["live_scan_enabled"])
+        self.assertIn("demo_repo_url", health)
 
     def test_progress_events_are_emitted(self):
         self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
@@ -419,6 +434,7 @@ class BackendSmokeTest(unittest.TestCase):
 
         import scanners.network as network_mod
         self._patch(network_mod, "scan_network", lambda target: [net_finding])
+        self._patch(config, "ENABLE_LIVE_SCAN", True)
 
         events = []
         result = scan_service.scan_repository(
@@ -549,6 +565,145 @@ class BackendSmokeTest(unittest.TestCase):
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertEqual(result["suggested_targets"], ["https://api.example.com"])
+
+    def test_trivy_flags_unpinned_base(self):
+        with open(os.path.join(self.tmp, "Dockerfile"), "w", encoding="utf-8") as fh:
+            fh.write("FROM node:latest\nRUN echo hi\n")
+        found = _REAL_SCAN_TRIVY(self.tmp, ["Dockerfile"])
+        self.assertTrue(any("latest" in f.title.lower() for f in found))
+
+    def test_crtsh_finds_sensitive_subdomains(self):
+        tgt = Finding(
+            id="TGT-001",
+            severity=Severity.INFO,
+            category="target",
+            title="Deploy target declared: https://api.example.com",
+            description="target",
+            file_path="README.md",
+            line_number=1,
+            evidence="https://api.example.com",
+            fix_suggestion="scope",
+            auto_fixable=False,
+        )
+        domains = crtsh.collect_domains([tgt], self.repo_url, "")
+        self.assertEqual(domains, ["example.com"])
+
+        class FakeResp:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return [{"name_value": "admin.example.com\napi.example.com"}]
+
+        self._patch(crtsh.requests, "get", lambda url, timeout=20: FakeResp())
+        found = _REAL_SCAN_CRTSH(["example.com"])
+        self.assertEqual(len(found), 1)
+        self.assertIn("admin.example.com", found[0].evidence)
+
+    def test_github_actions_flags_pull_request_target(self):
+        wf_dir = os.path.join(self.tmp, ".github", "workflows")
+        os.makedirs(wf_dir, exist_ok=True)
+        with open(os.path.join(wf_dir, "ci.yml"), "w", encoding="utf-8") as fh:
+            fh.write("on:\n  pull_request_target:\n    types: [opened]\n")
+        found = _REAL_SCAN_GHA(self.tmp, [".github/workflows/ci.yml"])
+        self.assertTrue(any("pull_request_target" in f.title for f in found))
+
+    def test_attack_graph_links_container_and_exposure(self):
+        exp = Finding(
+            id="EXP-001",
+            severity=Severity.HIGH,
+            category="exposure",
+            title="docker-compose: Public bind on all interfaces",
+            description="exposure",
+            file_path="docker-compose.yml",
+            line_number=4,
+            evidence="0.0.0.0:8080",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        ctr = Finding(
+            id="TRV-001",
+            severity=Severity.MEDIUM,
+            category="container",
+            title="Unpinned or latest base image: python:latest",
+            description="container",
+            file_path="Dockerfile",
+            line_number=1,
+            evidence="FROM python:latest",
+            fix_suggestion="pin",
+            auto_fixable=False,
+        )
+        import attack_graph
+
+        eps = attack_graph.build_entry_points([exp, ctr])
+        self.assertTrue(any("Container risk" in ep["title"] for ep in eps))
+
+    def test_attack_graph_links_crtsh_and_auth(self):
+        crt = Finding(
+            id="CRT-001",
+            severity=Severity.HIGH,
+            category="crtsh",
+            title="Sensitive subdomains in CT logs for example.com",
+            description="crt",
+            file_path=None,
+            line_number=None,
+            evidence="admin.example.com, staging.example.com",
+            fix_suggestion="review",
+            auto_fixable=False,
+        )
+        auth_f = Finding(
+            id="AUTH-001",
+            severity=Severity.HIGH,
+            category="auth",
+            title="JWT verify disabled",
+            description="auth",
+            file_path="app.py",
+            line_number=1,
+            evidence="verify=False",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        import attack_graph
+
+        eps = attack_graph.build_entry_points([crt, auth_f])
+        self.assertTrue(any("Hidden subdomain" in ep["title"] for ep in eps))
+
+    def test_wayback_finds_archived_sensitive_paths(self):
+        class FakeResp:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return [
+                    ["original"],
+                    ["http://example.com/admin/dashboard"],
+                    ["http://example.com/static/app.js"],
+                ]
+
+        self._patch(wayback.requests, "get", lambda url, timeout=25: FakeResp())
+        found = _REAL_SCAN_WAYBACK(["example.com"])
+        self.assertEqual(len(found), 1)
+        self.assertIn("/admin", found[0].evidence)
+
+    def test_live_target_ignored_when_disabled(self):
+        self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
+        self._patch(fetcher, "list_repo_files", lambda local_path: ["a.py"])
+        self._patch(fetcher, "cleanup_repo", lambda local_path: None)
+        self._patch(deps, "scan_dependencies", lambda local_path: [])
+        self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
+        self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
+        self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
+        self._patch(config, "ENABLE_LIVE_SCAN", False)
+
+        import scanners.network as network_mod
+        self._patch(network_mod, "scan_network", lambda target: (_ for _ in ()).throw(AssertionError("network should not run")))
+
+        result = scan_service.scan_repository(self.repo_url, "", None, live_target="scanme.nmap.org")
+        self.assertEqual(result["live_target"], "")
+        self.assertNotIn("network", result["scanner_status"])
+        self.assertTrue(any("ENABLE_LIVE_SCAN" in err for err in result["scan_errors"]))
 
 
 if __name__ == "__main__":

@@ -46,10 +46,19 @@ async def get_models():
 
 @app.get("/api/health")
 async def health():
+    from pathlib import Path
+
+    demo_path = Path(__file__).resolve().parent / "demo" / "cosentinel-vuln-demo"
+    demo_url = demo_path.as_uri() if demo_path.is_dir() else None
     return {
         "status": "ok",
         "model": config.REGOLO_MODEL,
-        "scanners": ["deps", "secrets", "code", "routes", "targets", "auth", "exposure", "config", "git_history", "network"],
+        "live_scan_enabled": config.ENABLE_LIVE_SCAN,
+        "demo_repo_url": demo_url,
+        "scanners": [
+            "deps", "secrets", "code", "routes", "targets", "auth", "exposure", "config",
+            "trivy", "github_actions", "semgrep", "git_history", "crtsh", "wayback", "network",
+        ],
     }
 
 

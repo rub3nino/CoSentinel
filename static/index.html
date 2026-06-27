@@ -280,7 +280,7 @@
   .kpi.med  .kpi-count, .kpi.med  .kpi-label { color: var(--sev-med); }
   .kpi.low  .kpi-count, .kpi.low  .kpi-label { color: var(--sev-low); }
 
-  .status-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 18px 0 0; }
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin: 18px 0 0; }
   .status-card { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 13px; background: var(--surface); }
   .status-card.ok { border-color: var(--ok-bd); background: var(--ok-bg); }
   .status-card.err { border-color: var(--sev-crit-bd); background: var(--sev-crit-bg); }
@@ -429,9 +429,14 @@
 
   .ep-section { margin-top: 16px; }
   .ep-head { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+    text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .ep-hint { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-3); margin-left: auto; }
   .ep-list { display: grid; gap: 10px; }
-  .ep-card { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 14px 16px; }
+  .ep-card { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 14px 16px;
+    width: 100%; text-align: left; cursor: pointer; transition: box-shadow .2s, border-color .2s, transform .15s var(--ease); }
+  .ep-card:hover { box-shadow: var(--sh-2); border-color: var(--ink-3); }
+  .ep-card:active { transform: scale(.995); }
+  .ep-card:focus-visible { outline: 2px solid var(--red-deep); outline-offset: 2px; }
   .ep-card.confirmed { border-color: var(--sev-crit-bd); background: var(--sev-crit-bg); }
   .ep-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .ep-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .06em;
@@ -440,7 +445,15 @@
   .ep-badge.inferred { color: var(--sev-med); border-color: var(--sev-med-bd); }
   .ep-title { font-weight: 600; font-size: 14px; color: var(--ink); flex: 1 1 200px; }
   .ep-body { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
-  .ep-ids { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+  .ep-ids { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ep-ids-label { font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); margin-right: 2px; }
+  .ep-id-chip { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--line); border-radius: var(--r-pill);
+    background: var(--surface-2); color: var(--ink-2); padding: 3px 9px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .ep-id-chip:hover { border-color: var(--red-deep); color: var(--red-deep); background: var(--red-soft); }
+  .ep-id-chip:focus-visible { outline: 2px solid var(--red-deep); outline-offset: 2px; }
+
+  details.finding.finding-highlight { border-color: var(--red-deep); box-shadow: 0 0 0 3px rgba(196,65,12,.15); animation: epFlash 2s var(--ease); }
+  @keyframes epFlash { 0%,100% { box-shadow: 0 0 0 3px rgba(196,65,12,.15); } 50% { box-shadow: 0 0 0 6px rgba(196,65,12,.28); } }
 
   .target-suggest { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .target-suggest-label { font-size: 12px; color: var(--ink-2); margin-right: 4px; }
@@ -633,8 +646,9 @@
           <div class="form-head"><span class="tag">NUOVA SCANSIONE</span></div>
           <div class="field">
             <label class="field-label" for="repoUrl">URL repository GitHub</label>
-            <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
+            <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo or file:///…/demo/cosentinel-vuln-demo" autocomplete="off" spellcheck="false">
             <div class="helper" id="urlHelper">Pubblico o privato. Incolla l'URL completo del repository.</div>
+            <button type="button" class="btn btn-sm btn-ghost" id="demoRepoBtn" style="margin-top:8px"></button>
           </div>
           <div class="row">
             <div class="grow">
@@ -647,7 +661,7 @@
               <select id="model"><option>caricamento…</option></select>
             </div>
           </div>
-          <div class="field">
+          <div class="field" id="liveTargetSection">
             <label class="field-label" for="liveTarget">Live target (opzionale)</label>
             <input id="liveTarget" type="text" placeholder="scanme.nmap.org o https://staging.example.com" autocomplete="off" spellcheck="false">
             <div class="helper" id="liveTargetHelp">Solo sistemi di tua proprietà o con permesso scritto. Valida entry point esterni (nmap, header, TLS, nikto/gobuster).</div>
@@ -705,7 +719,10 @@
           <div class="status-grid" id="scannerStatus"></div>
           <div class="kpis" id="kpis"></div>
           <section class="block hidden ep-section" id="entryPointsSection">
-            <div class="ep-head" id="entryPointsTitle"></div>
+            <div class="ep-head">
+              <span id="entryPointsTitle"></span>
+              <span class="ep-hint" id="entryPointsHint"></span>
+            </div>
             <div class="ep-list" id="entryPoints"></div>
           </section>
           <div class="card trend-card hidden" id="trendCard">
@@ -763,7 +780,12 @@ const $ = id => document.getElementById(id);
 let TOTAL_STEPS = 8;
 const SEV_CLASS = { CRITICAL: 'crit', HIGH: 'high', MEDIUM: 'med', LOW: 'low', INFO: 'info' };
 const SEV_ICON  = { CRITICAL: 'i-alert', HIGH: 'i-alert', MEDIUM: 'i-alert', LOW: 'i-info', INFO: 'i-info' };
-const CAT_ICON  = { dependency: 'i-package', secret: 'i-key', code: 'i-code', config: 'i-settings', exposure: 'i-shield-check', network: 'i-external', route: 'i-external', target: 'i-external', auth: 'i-shield-check' };
+const CAT_ICON  = {
+  dependency: 'i-package', secret: 'i-key', code: 'i-code', config: 'i-settings',
+  exposure: 'i-shield-check', network: 'i-external', route: 'i-external', target: 'i-external',
+  auth: 'i-shield-check', container: 'i-settings', crtsh: 'i-external', wayback: 'i-external',
+  github_actions: 'i-pr', semgrep: 'i-code', git_history: 'i-history',
+};
 const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const I18N = {
@@ -788,7 +810,8 @@ const I18N = {
     tool_history: ['Scansione cronologia', "Rilegge la cronologia del repository per trovare segreti o regressioni sfuggiti all’ultimo commit.", 'Audit commit'],
     form_tag: 'NUOVA SCANSIONE',
     repo_label: 'URL repository GitHub',
-    repo_help: "Pubblico o privato. Incolla l'URL completo del repository.",
+    repo_help: 'GitHub URL o repo locale demo (file://).',
+    demo_repo_btn: 'Carica repo demo hackathon',
     token_label: 'Token GitHub',
     token_help: 'Serve solo per repository privati.',
     model_label: 'Modello AI',
@@ -827,10 +850,12 @@ const I18N = {
     step_counter: n => `Passo ${n} di ${TOTAL_STEPS}`,
     scan_failed: 'Scansione fallita.',
     show_report: 'Mostra report',
-    scanner_names: { deps: 'dipendenze', secrets: 'segreti', code: 'codice', routes: 'route API', targets: 'target deploy', auth: 'auth debole', exposure: 'esposizione', config: 'config', git_history: 'cronologia git', network: 'entry point live' },
+    scanner_names: { deps: 'dipendenze', secrets: 'segreti', code: 'codice', routes: 'route API', targets: 'target deploy', auth: 'auth debole', exposure: 'esposizione', config: 'config', trivy: 'container', github_actions: 'GitHub Actions', semgrep: 'Semgrep SAST', crtsh: 'subdomini CT', wayback: 'Wayback OSINT', git_history: 'cronologia git', network: 'entry point live' },
     target_suggest_label: 'Target suggeriti dal repo:',
     target_use: 'Usa per validazione live',
     entry_points_title: 'Percorsi di ingresso',
+    entry_points_hint: 'Clicca una card o un ID per saltare al finding',
+    filter_cleared: 'Filtri rimossi per mostrare il finding collegato',
     entry_points_empty: 'Nessun percorso di ingresso correlato.',
     ep_confirmed: 'CONFERMATO',
     ep_inferred: 'INFERITO',
@@ -877,7 +902,8 @@ const I18N = {
     tool_history: ['Git history sweep', 'Replays repository history to catch secrets or regressions that survived the latest commit.', 'Commit audit'],
     form_tag: 'NEW SCAN',
     repo_label: 'GitHub Repository URL',
-    repo_help: 'Public or private. Paste the full repository URL.',
+    repo_help: 'GitHub URL or local demo repo (file://).',
+    demo_repo_btn: 'Load hackathon demo repo',
     token_label: 'GitHub Token',
     token_help: 'Only needed for private repositories.',
     model_label: 'AI Model',
@@ -916,10 +942,12 @@ const I18N = {
     step_counter: n => `Step ${n} of ${TOTAL_STEPS}`,
     scan_failed: 'Scan failed.',
     show_report: 'Show report',
-    scanner_names: { deps: 'deps', secrets: 'secrets', code: 'code', routes: 'routes', targets: 'deploy targets', auth: 'weak auth', exposure: 'exposure', config: 'config', git_history: 'git_history', network: 'live entry points' },
+    scanner_names: { deps: 'deps', secrets: 'secrets', code: 'code', routes: 'routes', targets: 'deploy targets', auth: 'weak auth', exposure: 'exposure', config: 'config', trivy: 'container', github_actions: 'GitHub Actions', semgrep: 'Semgrep SAST', crtsh: 'CT subdomains', wayback: 'Wayback OSINT', git_history: 'git_history', network: 'live entry points' },
     target_suggest_label: 'Suggested targets from repo:',
     target_use: 'Use for live validation',
     entry_points_title: 'Entry paths',
+    entry_points_hint: 'Click a card or finding ID to jump',
+    filter_cleared: 'Filters cleared to show linked finding',
     entry_points_empty: 'No correlated entry paths identified.',
     ep_confirmed: 'CONFIRMED',
     ep_inferred: 'INFERRED',
@@ -990,6 +1018,8 @@ function applyLocale(lang = LANG) {
   document.querySelector('#scanCard .tag').textContent = t('form_tag');
   document.querySelector('label[for="repoUrl"]').textContent = t('repo_label');
   document.querySelector('#urlHelper').textContent = t('repo_help');
+  const demoBtn = $('demoRepoBtn');
+  if (demoBtn) demoBtn.textContent = t('demo_repo_btn');
   document.querySelector('label[for="token"]').textContent = t('token_label');
   document.querySelector('#token').nextElementSibling.textContent = t('token_help');
   document.querySelector('label[for="model"]').textContent = t('model_label');
@@ -1047,6 +1077,34 @@ function jumpToSection(id) {
   if (!el) return;
   $('canvas').scrollTo({ top: Math.max(0, el.offsetTop - 16), behavior: REDUCE ? 'auto' : 'smooth' });
 }
+
+function scrollToFinding(findingId) {
+  if (!findingId || !lastFindings.length) return;
+  if (!lastFindings.some(f => f.id === findingId)) {
+    toast(t('no_match'), 'info');
+    return;
+  }
+  const filtered = getFilteredFindings();
+  if (!filtered.some(f => f.id === findingId)) {
+    activeFilter = null;
+    findCat = '';
+    findQuery = '';
+    if ($('findSearch')) $('findSearch').value = '';
+    [...($('kpis')?.children || [])].forEach(c => c.classList.remove('active'));
+    renderFindings();
+    toast(t('filter_cleared'), 'info', 2200);
+  }
+  requestAnimationFrame(() => {
+    const el = document.getElementById('finding-' + findingId);
+    if (!el) return;
+    el.open = true;
+    el.classList.add('finding-highlight');
+    setTimeout(() => el.classList.remove('finding-highlight'), REDUCE ? 0 : 2200);
+    const canvas = $('canvas');
+    const top = el.getBoundingClientRect().top - canvas.getBoundingClientRect().top + canvas.scrollTop - 16;
+    canvas.scrollTo({ top: Math.max(0, top), behavior: REDUCE ? 'auto' : 'smooth' });
+  });
+}
 $('canvas').addEventListener('click', e => {
   const btn = e.target.closest('[data-jump]');
   if (!btn) return;
@@ -1055,7 +1113,7 @@ $('canvas').addEventListener('click', e => {
 
 /* ---- new scan ---- */
 function showNewScan() {
-  ['progress','results','findingsTools','findings','prSection','reportSection'].forEach(s => $(s).classList.add('hidden'));
+  ['progress','results','findingsTools','findings','prSection','reportSection','entryPointsSection'].forEach(s => $(s).classList.add('hidden'));
   $('errBox').innerHTML = '';
   findQuery = ''; findCat = ''; clearHash();
   $('heroEmpty').classList.remove('hidden');
@@ -1076,6 +1134,13 @@ fetch('/api/health').then(r => r.json()).then(d => {
     $('liveText').textContent = `${t('online_prefix')} · ${d.model}`;
     $('liveDot').classList.remove('pulse');
   }
+  if (d.live_scan_enabled === false) {
+    const section = $('liveTargetSection');
+    if (section) section.classList.add('hidden');
+    $('liveTarget').value = '';
+    updateScanBtnState();
+  }
+  if (d.demo_repo_url) window.__demoRepoUrl = d.demo_repo_url;
 }).catch(() => {
   liveState = { status: 'offline', model: '' };
   $('liveDot').style.background = 'var(--sev-med)';
@@ -1086,6 +1151,16 @@ fetch('/api/health').then(r => r.json()).then(d => {
 fetch('/api/models').then(r => r.json()).then(d => {
   if (d.models && d.models.length) $('model').innerHTML = d.models.map(m => `<option>${esc(m)}</option>`).join('');
 }).catch(() => { $('model').innerHTML = '<option>default</option>'; });
+
+$('demoRepoBtn')?.addEventListener('click', () => {
+  const url = window.__demoRepoUrl;
+  if (!url) { toast(t('no_match'), 'err'); return; }
+  $('repoUrl').value = url;
+  $('repoUrl').classList.remove('invalid');
+  $('urlHelper').textContent = t('repo_help');
+  $('urlHelper').style.color = '';
+  $('repoUrl').focus();
+});
 
 /* ---- form ---- */
 function hasLiveTarget() { return !!$('liveTarget').value.trim(); }
@@ -1116,9 +1191,11 @@ updateScanBtnState();
 $('repoUrl').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('scanBtn').disabled) startScan(); });
 $('repoUrl').addEventListener('blur', () => {
   const v = $('repoUrl').value.trim();
-  const ok = !v || /github\.com\//.test(v);
+  const ok = !v || /github\.com\//.test(v) || v.startsWith('file://');
   $('repoUrl').classList.toggle('invalid', !ok);
-  $('urlHelper').textContent = ok ? 'Public or private. Paste the full repository URL.' : 'Enter a valid github.com repository URL.';
+  $('urlHelper').textContent = ok
+    ? 'GitHub URL or local demo: file:///path/to/repo'
+    : 'Enter a github.com URL or file:///… local git repo.';
   $('urlHelper').style.color = ok ? '' : 'var(--red)';
 });
 
@@ -1407,6 +1484,7 @@ function renderEntryPoints(entryPoints) {
   const list = $('entryPoints');
   if (!section || !list) return;
   setText('entryPointsTitle', t('entry_points_title'));
+  setText('entryPointsHint', t('entry_points_hint'));
   if (!entryPoints.length) {
     section.classList.add('hidden');
     list.innerHTML = '';
@@ -1416,15 +1494,18 @@ function renderEntryPoints(entryPoints) {
   list.innerHTML = entryPoints.map(ep => {
     const confirmed = ep.status === 'CONFIRMED';
     const badge = confirmed ? t('ep_confirmed') : t('ep_inferred');
-    const ids = (ep.finding_ids || []).map(id => `<span class="scan-chip">${esc(id)}</span>`).join(' ');
-    return `<article class="ep-card ${confirmed ? 'confirmed' : ''}">
+    const firstId = (ep.finding_ids || [])[0] || '';
+    const chips = (ep.finding_ids || []).map(id =>
+      `<button type="button" class="ep-id-chip" data-finding-jump="${esc(id)}" title="${esc(t('entry_points_hint'))}">${esc(id)}</button>`
+    ).join('');
+    return `<article class="ep-card ${confirmed ? 'confirmed' : ''}" tabindex="0" role="button" data-ep-jump="${esc(firstId)}" aria-label="${esc(ep.title || '')}">
       <div class="ep-top">
         <span class="ep-badge ${confirmed ? 'confirmed' : 'inferred'}">${esc(badge)}</span>
         <span class="badge ${SEV_CLASS[ep.severity] || 'info'}">${esc(ep.severity || 'INFO')}</span>
         <span class="ep-title">${esc(ep.title || '')}</span>
       </div>
       <div class="ep-body">${esc(ep.narrative || '')}</div>
-      <div class="ep-ids">${ids}</div>
+      <div class="ep-ids"><span class="ep-ids-label">findings</span>${chips}</div>
     </article>`;
   }).join('');
 }
@@ -1453,7 +1534,7 @@ function findingCard(f, i) {
   const cves = (f.cve_ids||[]).map(c =>
     `<a class="cve" href="https://nvd.nist.gov/vuln/detail/${esc(c)}" target="_blank">${esc(c)}</a>`).join('');
   const catIco = CAT_ICON[f.category] || 'i-info';
-  return `<details class="finding" style="--i:${i}">
+  return `<details class="finding" id="finding-${esc(f.id)}" data-finding-id="${esc(f.id)}" style="--i:${i}">
     <summary>
       <span class="badge ${cls}">${icon(SEV_ICON[f.severity])}${f.severity}</span>
       <span class="cat">${icon(catIco)}${esc(f.category)}</span>
@@ -1479,6 +1560,24 @@ $('findings').addEventListener('click', e => {
   const orig = pill.textContent;
   pill.textContent = 'Copied!';
   setTimeout(() => { pill.textContent = orig; }, 1200);
+});
+
+$('entryPoints')?.addEventListener('click', e => {
+  const chip = e.target.closest('[data-finding-jump]');
+  if (chip) {
+    e.stopPropagation();
+    scrollToFinding(chip.dataset.findingJump);
+    return;
+  }
+  const card = e.target.closest('[data-ep-jump]');
+  if (card && card.dataset.epJump) scrollToFinding(card.dataset.epJump);
+});
+$('entryPoints')?.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('[data-ep-jump]');
+  if (!card || e.target.closest('[data-finding-jump]')) return;
+  e.preventDefault();
+  scrollToFinding(card.dataset.epJump);
 });
 
 /* history: open (click row / Enter) + delete (two-step confirm, no instant destroy) */

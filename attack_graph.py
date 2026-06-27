@@ -62,14 +62,6 @@ def _critical_secrets(secrets: list[Finding]) -> list[Finding]:
     return [f for f in secrets if f.severity in {Severity.CRITICAL, Severity.HIGH}]
 
 
-def _git_secrets(findings: list[Finding]) -> list[Finding]:
-    return [f for f in findings if f.id.startswith("GIT-") or "git history" in f.title.lower()]
-
-
-def _sensitive_routes(routes: list[Finding]) -> list[Finding]:
-    return routes
-
-
 def _critical_deps(deps: list[Finding]) -> list[Finding]:
     return [f for f in deps if f.severity in {Severity.CRITICAL, Severity.HIGH}]
 
@@ -94,12 +86,25 @@ def _network_confirms(ep_title: str, network: list[Finding]) -> bool:
     return False
 
 
-def _deploy_targets(targets: list[Finding]) -> list[Finding]:
-    return targets
-
-
 def _weak_auth(auth: list[Finding]) -> list[Finding]:
     return [f for f in auth if f.severity in {Severity.CRITICAL, Severity.HIGH}]
+
+
+def _sensitive_crtsh(crtsh: list[Finding]) -> list[Finding]:
+    return [f for f in crtsh if "Sensitive subdomains" in f.title or f.severity in {Severity.HIGH, Severity.CRITICAL}]
+
+
+def _container_risks(container: list[Finding]) -> list[Finding]:
+    keys = ("misconfig", "Vulnerable base", "Unpinned", "latest base")
+    return [f for f in container if any(k in f.title for k in keys)]
+
+
+def _wayback_hits(wayback: list[Finding]) -> list[Finding]:
+    return [f for f in wayback if f.severity in {Severity.HIGH, Severity.CRITICAL}]
+
+
+def _critical_github_actions(gha: list[Finding]) -> list[Finding]:
+    return [f for f in gha if f.severity in {Severity.CRITICAL, Severity.HIGH}]
 
 
 def build_entry_points(findings: list[Finding], live_target: str | None = None) -> list[dict]:
@@ -113,15 +118,23 @@ def build_entry_points(findings: list[Finding], live_target: str | None = None) 
     network = grouped.get("network", [])
     targets = grouped.get("target", [])
     auth = grouped.get("auth", [])
+    crtsh = grouped.get("crtsh", [])
+    container = grouped.get("container", [])
+    wayback = grouped.get("wayback", [])
+    github_actions = grouped.get("github_actions", [])
 
     public = _has_public_exposure(exposure)
     debug = _has_debug(code)
     crit_secrets = _critical_secrets(secrets)
-    git_sec = _git_secrets(findings)
-    sens_routes = _sensitive_routes(routes)
+    git_sec = [f for f in git if f.id.startswith("GIT-") or "git history" in f.title.lower()]
+    sens_routes = routes
     crit_deps = _critical_deps(deps)
-    deploy_targets = _deploy_targets(targets)
+    deploy_targets = targets
     weak_auth = _weak_auth(auth)
+    crt_sensitive = _sensitive_crtsh(crtsh)
+    container_risk = _container_risks(container)
+    wayback_sensitive = _wayback_hits(wayback)
+    critical_gha = _critical_github_actions(github_actions)
 
     candidates: list[EntryPoint] = []
     counter = 0
@@ -205,6 +218,81 @@ def build_entry_points(findings: list[Finding], live_target: str | None = None) 
             "Critical CVE on reachable surface",
             "Critical dependency issue combined with external exposure or sensitive route — higher chance of remote abuse.",
             _ids(crit_deps[:1], (sens_routes or public)[:1]),
+            "medium",
+        )
+
+    if crt_sensitive and weak_auth:
+        subdomain = crt_sensitive[0].evidence.split(",")[0].strip()
+        add(
+            Severity.HIGH,
+            f"Hidden subdomain surface ({subdomain or 'CT logs'}) with weak auth",
+            "Certificate Transparency exposed additional hostnames while the app has authentication weaknesses on the primary surface.",
+            _ids(crt_sensitive[:1], weak_auth[:1]),
+            "high",
+        )
+
+    if crt_sensitive and deploy_targets:
+        domain = deploy_targets[0].title.split(": ", 1)[-1]
+        add(
+            Severity.HIGH,
+            f"Expanded subdomain attack surface for {domain}",
+            "Passive CT enumeration found sensitive subdomains tied to a deployment URL declared in the repository.",
+            _ids(crt_sensitive[:1], deploy_targets[:1]),
+            "high",
+        )
+
+    if crt_sensitive and sens_routes:
+        add(
+            Severity.HIGH,
+            "Sensitive subdomains plus unguarded routes",
+            "CT logs suggest extra hosts while the codebase declares sensitive HTTP routes — broader entry surface.",
+            _ids(crt_sensitive[:1], sens_routes[:2]),
+            "medium",
+        )
+
+    if container_risk and public:
+        add(
+            Severity.HIGH,
+            "Container risk on publicly exposed deployment",
+            "Dockerfile flags (misconfig, unpinned or vulnerable base) combined with public network binding in compose/k8s.",
+            _ids(container_risk[:2], public[:1]),
+            "high",
+        )
+
+    if container_risk and crt_sensitive:
+        add(
+            Severity.MEDIUM,
+            "Container misconfiguration with expanded hostname inventory",
+            "Container base/misconfig issues plus CT-discovered subdomains increase blast radius for a compromised image.",
+            _ids(container_risk[:1], crt_sensitive[:1]),
+            "medium",
+        )
+
+    if wayback_sensitive and deploy_targets:
+        url = deploy_targets[0].title.split(": ", 1)[-1]
+        add(
+            Severity.HIGH,
+            f"Historical sensitive URLs archived for {url}",
+            "Wayback Machine captured admin/config paths — may indicate past exposure or forgotten endpoints.",
+            _ids(wayback_sensitive[:1], deploy_targets[:1]),
+            "high",
+        )
+
+    if critical_gha and crit_secrets:
+        add(
+            Severity.CRITICAL,
+            "Poisonable CI pipeline with secrets in repository",
+            "GitHub Actions workflow allows untrusted input or elevated triggers while high-value secrets exist in the repo.",
+            _ids(critical_gha[:1], crit_secrets[:1]),
+            "high",
+        )
+
+    if critical_gha and not crit_secrets:
+        add(
+            Severity.HIGH,
+            f"CI/CD supply-chain risk: {critical_gha[0].title.split(': ', 1)[-1]}",
+            critical_gha[0].description,
+            [critical_gha[0].id],
             "medium",
         )
 

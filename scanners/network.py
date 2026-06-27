@@ -15,9 +15,16 @@ def _next_id() -> str:
         return f"NET-{_counter:03d}"
 
 
-def _run(cmd: str, timeout: int = 90) -> str:
+def _run(cmd: list[str], timeout: int = 90, *, input_text: str | None = None) -> str:
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(
+            cmd,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            input=input_text,
+        )
         return (r.stdout + r.stderr)[:12000]
     except subprocess.TimeoutExpired:
         return f"[timeout after {timeout}s]"
@@ -38,7 +45,8 @@ def scan_network(target: str) -> list[Finding]:
     findings: list[Finding] = []
     host = _normalize_host(target)
     is_web = target.startswith("http://") or target.startswith("https://")
-    scheme = "https" if target.startswith("https") else "http"
+    if not host:
+        raise ValueError("Live target must include a host")
     web_url = target if is_web else f"http://{host}"
 
     findings += _nmap_basic(host)
@@ -50,6 +58,8 @@ def scan_network(target: str) -> list[Finding]:
         findings += _nikto(web_url)
     if shutil.which("gobuster"):
         findings += _gobuster(web_url)
+    if shutil.which("nuclei"):
+        findings += _nuclei(web_url)
 
     return findings
 
@@ -66,7 +76,7 @@ def _normalize_host(target: str) -> str:
 
 def _nmap_basic(host: str) -> list[Finding]:
     findings = []
-    out = _run(f"nmap -sV -sC -T4 --open -p 21,22,23,25,80,443,445,3306,3389,5432,6379,8080,8443,27017 {host}", timeout=60)
+    out = _run(["nmap", "-sV", "-T4", "--open", "-p", "21,22,23,25,80,443,445,3306,3389,5432,6379,8080,8443,27017", host], timeout=60)
 
     # dangerous open ports
     RISKY_PORTS = {
@@ -130,7 +140,7 @@ def _nmap_basic(host: str) -> list[Finding]:
 
 def _nmap_vuln(host: str) -> list[Finding]:
     findings = []
-    out = _run(f"nmap --script vuln -T4 -p 80,443,8080,8443 {host}", timeout=120)
+    out = _run(["nmap", "--script", "vuln", "-T4", "-p", "80,443,8080,8443", host], timeout=120)
 
     vuln_patterns = [
         (r"VULNERABLE", Severity.HIGH, "nmap vuln script detected vulnerability"),
@@ -168,7 +178,7 @@ def _nmap_vuln(host: str) -> list[Finding]:
 
 def _check_headers(url: str) -> list[Finding]:
     findings = []
-    out = _run(f"curl -sI --max-time 10 --location {url}", timeout=15)
+    out = _run(["curl", "-sI", "--max-time", "10", "--location", url], timeout=15)
     if not out or "timeout" in out or "error" in out.lower():
         return findings
 
@@ -244,13 +254,15 @@ def _check_headers(url: str) -> list[Finding]:
 
 def _check_tls(host: str) -> list[Finding]:
     findings = []
-    out = _run(f"openssl s_client -connect {host}:443 -brief </dev/null 2>&1", timeout=10)
+    out = _run(["openssl", "s_client", "-connect", f"{host}:443", "-brief"], timeout=10)
 
     if "unable to load" in out or "Connection refused" in out or "connect: " in out.lower():
         return findings
 
     # Cert expiry
-    cert_out = _run(f"openssl s_client -connect {host}:443 </dev/null 2>&1 | openssl x509 -noout -dates 2>/dev/null", timeout=10)
+    cert_chain = _run(["openssl", "s_client", "-connect", f"{host}:443", "-showcerts"], timeout=10)
+    cert_match = re.search(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", cert_chain, re.DOTALL)
+    cert_out = _run(["openssl", "x509", "-noout", "-dates"], timeout=10, input_text=cert_match.group(0) if cert_match else None)
     expiry_match = re.search(r"notAfter=(.*)", cert_out)
     if expiry_match:
         import datetime
@@ -283,7 +295,7 @@ def _check_tls(host: str) -> list[Finding]:
 
     # Weak TLS versions
     for tls_ver, label in [("tls1", "TLS 1.0"), ("tls1_1", "TLS 1.1")]:
-        ver_out = _run(f"openssl s_client -{tls_ver} -connect {host}:443 </dev/null 2>&1", timeout=8)
+        ver_out = _run(["openssl", "s_client", f"-{tls_ver}", "-connect", f"{host}:443"], timeout=8)
         if "Cipher is" in ver_out or "Protocol  : " in ver_out:
             findings.append(Finding(
                 id=_next_id(), severity=Severity.HIGH,
@@ -304,7 +316,7 @@ def _check_dns(host: str) -> list[Finding]:
     findings = []
 
     # SPF record
-    spf_out = _run(f"dig +short TXT {host}", timeout=10)
+    spf_out = _run(["dig", "+short", "TXT", host], timeout=10)
     if "v=spf1" not in spf_out:
         findings.append(Finding(
             id=_next_id(), severity=Severity.MEDIUM,
@@ -317,7 +329,7 @@ def _check_dns(host: str) -> list[Finding]:
         ))
 
     # DMARC
-    dmarc_out = _run(f"dig +short TXT _dmarc.{host}", timeout=10)
+    dmarc_out = _run(["dig", "+short", "TXT", f"_dmarc.{host}"], timeout=10)
     if "v=DMARC1" not in dmarc_out:
         findings.append(Finding(
             id=_next_id(), severity=Severity.MEDIUM,
@@ -330,10 +342,10 @@ def _check_dns(host: str) -> list[Finding]:
         ))
 
     # Zone transfer attempt
-    ns_out = _run(f"dig +short NS {host}", timeout=10)
+    ns_out = _run(["dig", "+short", "NS", host], timeout=10)
     ns_servers = [line.strip() for line in ns_out.splitlines() if line.strip()]
     for ns in ns_servers[:2]:
-        axfr_out = _run(f"dig @{ns} {host} AXFR", timeout=10)
+        axfr_out = _run(["dig", f"@{ns}", host, "AXFR"], timeout=10)
         if "Transfer failed" not in axfr_out and len(axfr_out) > 200 and "IN" in axfr_out:
             findings.append(Finding(
                 id=_next_id(), severity=Severity.CRITICAL,
@@ -353,7 +365,7 @@ def _check_dns(host: str) -> list[Finding]:
 
 def _nikto(url: str) -> list[Finding]:
     findings = []
-    out = _run(f"nikto -h {url} -maxtime 60 -nointeractive 2>/dev/null", timeout=75)
+    out = _run(["nikto", "-h", url, "-maxtime", "60", "-nointeractive"], timeout=75)
 
     for line in out.splitlines():
         if line.startswith("+") and ("OSVDB" in line or "vulnerable" in line.lower() or "CVE" in line):
@@ -377,7 +389,6 @@ def _nikto(url: str) -> list[Finding]:
 
 def _gobuster(url: str) -> list[Finding]:
     # Use a small built-in wordlist — no external file needed
-    wordlist = "/usr/share/wordlists/dirb/common.txt"
     if not shutil.which("gobuster"):
         return []
     # Try to find any wordlist
@@ -401,7 +412,7 @@ def _gobuster(url: str) -> list[Finding]:
             ]))
 
     findings = []
-    out = _run(f"gobuster dir -u {url} -w {wl} -q -t 20 --timeout 5s 2>/dev/null", timeout=60)
+    out = _run(["gobuster", "dir", "-u", url, "-w", wl, "-q", "-t", "20", "--timeout", "5s"], timeout=60)
 
     sensitive = re.compile(r"(admin|login|config|backup|\.env|\.git|debug|console|phpinfo|actuator|swagger|graphql)", re.I)
     for line in out.splitlines():
@@ -428,6 +439,63 @@ def _gobuster(url: str) -> list[Finding]:
                     auto_fixable=False,
                 ))
 
+    return findings
+
+
+# ── nuclei (info / misconfig only) ─────────────────────────────
+
+def _nuclei(url: str) -> list[Finding]:
+    findings = []
+    # info + misconfig tags only; no exploit templates; rate limited
+    out = _run(
+        [
+            "nuclei",
+            "-u",
+            url,
+            "-tags",
+            "info,misconfig,exposure,tech",
+            "-severity",
+            "info,low,medium,high,critical",
+            "-silent",
+            "-no-color",
+            "-rate-limit",
+            "15",
+            "-timeout",
+            "8",
+            "-max-host-error",
+            "5",
+        ],
+        timeout=90,
+    )
+
+    seen: set[str] = set()
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or line.startswith("[") and "INF]" in line:
+            continue
+        key = line[:80]
+        if key in seen:
+            continue
+        seen.add(key)
+        lower = line.lower()
+        severity = Severity.MEDIUM
+        if "critical" in lower or "cve-" in lower:
+            severity = Severity.HIGH
+        elif "info" in lower:
+            severity = Severity.INFO
+        findings.append(
+            Finding(
+                id=_next_id(), severity=severity,
+                category="network", title="nuclei: " + line[:80],
+                description=f"nuclei passive template match on {url}.",
+                file_path=None, line_number=None,
+                evidence=line[:300],
+                fix_suggestion="Review the nuclei finding and harden the exposed service or header.",
+                auto_fixable=False,
+            )
+        )
+        if len(findings) >= 10:
+            break
     return findings
 
 

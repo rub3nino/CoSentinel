@@ -9,6 +9,9 @@ REGOLO_MODEL = os.getenv("REGOLO_MODEL", "gpt-oss-120b")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
+# Live network validation (nmap, nuclei, …) — off by default for public/hackathon deployments.
+ENABLE_LIVE_SCAN = os.getenv("ENABLE_LIVE_SCAN", "false").lower() in ("1", "true", "yes")
+
 CLONE_BASE_DIR = "/tmp/cosentinel_repos"
 
 OSV_API_URL = "https://api.osv.dev/v1/query"

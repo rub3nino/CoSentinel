@@ -380,8 +380,9 @@ def scan_repository(
 ) -> dict:
     import agent
     import attack_graph
+    import config
     import fetcher
-    from scanners import auth, code, config_audit, deps, exposure, routes, secrets, targets
+    from scanners import auth, code, config_audit, crtsh, deps, exposure, github_actions, routes, secrets, semgrep, targets, trivy, wayback
 
     local_path = None
     started_at = time.perf_counter()
@@ -401,7 +402,7 @@ def scan_repository(
         _emit(progress_cb, 4, "Auditing source code and routes...")
         _emit(progress_cb, 5, "Checking authorized exposure...")
         _emit(progress_cb, 6, "Auditing configuration files...")
-        with ThreadPoolExecutor(max_workers=8) as pool:
+        with ThreadPoolExecutor(max_workers=11) as pool:
             dep_fut = pool.submit(_run_scanner, deps.scan_dependencies, local_path)
             sec_fut = pool.submit(_run_scanner, secrets.scan_secrets, local_path, all_files)
             code_fut = pool.submit(_run_scanner, code.scan_code, local_path, all_files)
@@ -410,9 +411,15 @@ def scan_repository(
             auth_fut = pool.submit(_run_scanner, auth.scan_auth, local_path, all_files)
             exp_fut = pool.submit(_run_scanner, exposure.scan_exposure, local_path, all_files)
             cfg_fut = pool.submit(_run_scanner, config_audit.scan_config, local_path, all_files)
-            dep_res, sec_res, code_res, route_res, tgt_res, auth_res, exp_res, cfg_res = [
+            trivy_fut = pool.submit(_run_scanner, trivy.scan_dockerfiles, local_path, all_files)
+            gha_fut = pool.submit(_run_scanner, github_actions.scan_github_actions, local_path, all_files)
+            sgm_fut = pool.submit(_run_scanner, semgrep.scan_semgrep, local_path)
+            dep_res, sec_res, code_res, route_res, tgt_res, auth_res, exp_res, cfg_res, trivy_res, gha_res, sgm_res = [
                 f.result()
-                for f in (dep_fut, sec_fut, code_fut, route_fut, tgt_fut, auth_fut, exp_fut, cfg_fut)
+                for f in (
+                    dep_fut, sec_fut, code_fut, route_fut, tgt_fut, auth_fut, exp_fut, cfg_fut,
+                    trivy_fut, gha_fut, sgm_fut,
+                )
             ]
 
         dep_findings, dep_errors = dep_res
@@ -423,8 +430,12 @@ def scan_repository(
         auth_findings, auth_errors = auth_res
         exp_findings, exp_errors = exp_res
         cfg_findings, cfg_errors = cfg_res
+        trivy_findings, trivy_errors = trivy_res
+        gha_findings, gha_errors = gha_res
+        sgm_findings, sgm_errors = sgm_res
         scan_errors.extend(
-            dep_errors + sec_errors + code_errors + route_errors + tgt_errors + auth_errors + exp_errors + cfg_errors
+            dep_errors + sec_errors + code_errors + route_errors + tgt_errors + auth_errors
+            + exp_errors + cfg_errors + trivy_errors + gha_errors + sgm_errors
         )
 
         scanner_status["deps"] = {
@@ -467,6 +478,21 @@ def scan_repository(
             "findings": len(cfg_findings),
             "errors": cfg_errors,
         }
+        scanner_status["trivy"] = {
+            "status": "ok" if not trivy_errors else "error",
+            "findings": len(trivy_findings),
+            "errors": trivy_errors,
+        }
+        scanner_status["github_actions"] = {
+            "status": "ok" if not gha_errors else "error",
+            "findings": len(gha_findings),
+            "errors": gha_errors,
+        }
+        scanner_status["semgrep"] = {
+            "status": "ok" if not sgm_errors else "error",
+            "findings": len(sgm_findings),
+            "errors": sgm_errors,
+        }
 
         try:
             _emit(progress_cb, 7, "Scanning git history...")
@@ -484,18 +510,58 @@ def scan_repository(
             "errors": git_errors,
         }
 
-        net_findings: list[Finding] = []
-        if live_target:
+        crt_findings: list[Finding] = []
+        domains: list[str] = []
+        crt_errors: list[str] = []
+        try:
+            domains = crtsh.collect_domains(tgt_findings, repo_url, live_target.strip() if live_target else "")
+            if domains:
+                crt_findings, crt_errors = _run_scanner(crtsh.scan_crtsh, domains)
+                scan_errors.extend(crt_errors)
+        except Exception as exc:
+            crt_errors = [f"scanners.crtsh.scan_crtsh: {exc}"]
+            scan_errors.extend(crt_errors)
+
+        scanner_status["crtsh"] = {
+            "status": "ok" if not crt_errors else "error",
+            "findings": len(crt_findings),
+            "errors": crt_errors,
+            "domains": domains,
+        }
+
+        wb_findings: list[Finding] = []
+        wb_errors: list[str] = []
+        if domains:
             try:
-                _emit(progress_cb, 8, f"Validating entry points on {live_target}...")
+                wb_findings, wb_errors = _run_scanner(wayback.scan_wayback, domains)
+                scan_errors.extend(wb_errors)
+            except Exception as exc:
+                wb_errors = [f"scanners.wayback.scan_wayback: {exc}"]
+                scan_errors.extend(wb_errors)
+
+        scanner_status["wayback"] = {
+            "status": "ok" if not wb_errors else "error",
+            "findings": len(wb_findings),
+            "errors": wb_errors,
+            "domains": domains,
+        }
+
+        net_findings: list[Finding] = []
+        live_enabled = config.ENABLE_LIVE_SCAN
+        effective_live = (live_target or "").strip() if live_enabled else ""
+        if live_target and live_target.strip() and not live_enabled:
+            scan_errors.append("Live target ignored: ENABLE_LIVE_SCAN is disabled (hackathon-safe default).")
+        if effective_live:
+            try:
+                _emit(progress_cb, 8, f"Validating entry points on {effective_live}...")
                 from scanners.network import scan_network
-                net_findings, net_errors = _run_scanner(scan_network, live_target.strip())
+                net_findings, net_errors = _run_scanner(scan_network, effective_live)
                 scan_errors.extend(net_errors)
                 scanner_status["network"] = {
                     "status": "ok" if not net_errors else "error",
                     "findings": len(net_findings),
                     "errors": net_errors,
-                    "target": live_target.strip(),
+                    "target": effective_live,
                 }
             except Exception as exc:
                 scan_errors.append(f"scanners.network: {exc}")
@@ -503,10 +569,10 @@ def scan_repository(
                     "status": "error",
                     "findings": 0,
                     "errors": [str(exc)],
-                    "target": live_target.strip(),
+                    "target": effective_live,
                 }
 
-        ai_step = 9 if live_target else 8
+        ai_step = 9 if effective_live else 8
         findings = _dedupe_findings(
             dep_findings
             + sec_findings
@@ -516,12 +582,17 @@ def scan_repository(
             + auth_findings
             + exp_findings
             + cfg_findings
+            + trivy_findings
+            + gha_findings
+            + sgm_findings
             + git_findings
+            + crt_findings
+            + wb_findings
             + net_findings
         )
         _attach_fix_patches(local_path, findings)
         suggested_targets = targets.list_target_urls(tgt_findings)
-        entry_points = attack_graph.build_entry_points(findings, live_target.strip() if live_target else None)
+        entry_points = attack_graph.build_entry_points(findings, effective_live or None)
 
         result = ScanResult(
             repo_url=repo_url,
@@ -537,7 +608,7 @@ def scan_repository(
                 repo_url,
                 result,
                 model or None,
-                live_target=live_target.strip() if live_target else None,
+                live_target=effective_live or None,
                 entry_points=entry_points,
             ),
             findings,
@@ -556,7 +627,7 @@ def scan_repository(
             started_iso,
             finished_at,
             entry_points=entry_points,
-            live_target=live_target.strip() if live_target else "",
+            live_target=effective_live,
             suggested_targets=suggested_targets,
         )
 
@@ -584,7 +655,7 @@ def scan_repository(
             "duration_sec": duration_sec,
             "scan_errors": scan_errors,
             "scanner_status": scanner_status,
-            "live_target": live_target.strip() if live_target else "",
+            "live_target": effective_live,
         }
     finally:
         if local_path:
