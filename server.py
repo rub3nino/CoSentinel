@@ -151,23 +151,23 @@ async def scan_stream(repo_url: str, github_token: str = "", model: str = "", li
 @app.post("/api/create-pr")
 async def create_pr(req: PRRequest):
     from pr_creator import create_fix_pr
-    from fix_patches import select_pr_candidates
     from scan_service import get_cached_findings
 
     try:
         findings = get_cached_findings(req.repo_url)
         if not findings:
             raise HTTPException(status_code=400, detail="No cached scan findings for this repository. Run a scan first.")
-        recommended = select_pr_candidates(findings, limit=2)
-        recommended_ids = [f.id for f in recommended]
-        if not recommended_ids:
-            raise HTTPException(status_code=400, detail="No auto-fixable findings with validated patches found.")
-        if sorted(req.finding_ids) != sorted(recommended_ids):
+        by_id = {f.id: f for f in findings}
+        finding_ids = list(dict.fromkeys(req.finding_ids))
+        if not finding_ids:
+            raise HTTPException(status_code=400, detail="Select at least one finding.")
+        missing = [finding_id for finding_id in finding_ids if finding_id not in by_id]
+        if missing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Use the recommended PR bundle only: {', '.join(recommended_ids)}",
+                detail=f"Unknown finding id(s): {', '.join(missing)}",
             )
-        pr_url = create_fix_pr(req.repo_url, req.github_token, req.finding_ids, findings)
+        pr_url = create_fix_pr(req.repo_url, req.github_token, finding_ids, findings)
         return {"pr_url": pr_url}
     except HTTPException:
         raise
