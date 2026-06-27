@@ -4,245 +4,484 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CoSentinel — AI Security Scanner</title>
+<link rel="icon" type="image/svg+xml" href="/static/COSENTINEL.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.3/dist/html2pdf.bundle.min.js"></script>
 <style>
   :root {
-    /* color tokens — document grey + scan blue (light only) */
-    --color-primary: #1E293B;
-    --color-on-primary: #FFFFFF;
-    --color-secondary: #334155;
-    --color-accent: #2563EB;
-    --color-accent-hover: #1D4ED8;
-    --color-background: #F8FAFC;
-    --color-surface: #FFFFFF;
-    --color-foreground: #0F172A;
-    --color-muted: #64748B;
-    --color-border: #E4E5E7;
-    --color-destructive: #DC2626;
-    /* severity */
-    --sev-crit: #DC2626; --sev-crit-bg: #FEF2F2; --sev-crit-bd: #FECACA;
-    --sev-high: #C2410C; --sev-high-bg: #FFF7ED; --sev-high-bd: #FED7AA;
-    --sev-med:  #A16207; --sev-med-bg:  #FEFCE8; --sev-med-bd:  #FEF08A;
-    --sev-low:  #2563EB; --sev-low-bg:  #EFF6FF; --sev-low-bd:  #BFDBFE;
-    --sev-info: #475569; --sev-info-bg: #F1F5F9; --sev-info-bd: #E2E8F0;
-    --ok: #15803D; --ok-bg: #F0FDF4; --ok-bd: #BBF7D0;
-    /* scales */
-    --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
-    --sh-1: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
-    --sh-2: 0 4px 12px rgba(15,23,42,.08);
-    --sh-3: 0 12px 32px rgba(15,23,42,.14);
-    --font-ui: 'Fira Sans', system-ui, sans-serif;
-    --font-mono: 'Fira Code', ui-monospace, monospace;
+    /* "Carbon Paper" — warm editorial-technical (extracted from reference) */
+    --paper:      #F4F1EA;   /* app background  */
+    --paper-2:    #ECE8DF;   /* sidebar / sunken */
+    --surface:    #FBFAF6;   /* cards            */
+    --surface-2:  #F6F3EC;   /* nested           */
+    --ink:        #19140F;   /* near-black text  */
+    --ink-2:      #57514A;   /* muted            */
+    --ink-3:      #8A8378;   /* faint            */
+    --line:       #DDD8CD;   /* warm border      */
+    --line-2:     #E7E3D8;   /* soft border      */
+    --red:        #E5342A;   /* accent / CTA     */
+    --red-deep:   #B81F17;
+    --red-soft:   #FBE9E7;
+
+    /* severity (warm-tuned, stays on-palette) */
+    --sev-crit: #E5342A; --sev-crit-bg: #FBE9E7; --sev-crit-bd: #F3C6C2;
+    --sev-high: #C2410C; --sev-high-bg: #FBEDE2; --sev-high-bd: #EFCFB4;
+    --sev-med:  #97640A; --sev-med-bg:  #F8F0DA; --sev-med-bd:  #E8D9AE;
+    --sev-low:  #5B6470; --sev-low-bg:  #EEEFF1; --sev-low-bd:  #D7DBDF;
+    --sev-info: #57514A; --sev-info-bg: #EFEBE2; --sev-info-bd: #DDD8CD;
+    --ok: #2F7D4F; --ok-bg: #E8F2EA; --ok-bd: #C2DEC9;
+
+    --r-sm: 6px; --r-md: 9px; --r-lg: 14px; --r-pill: 999px;
+    --sh-1: 0 1px 2px rgba(25,20,15,.05), 0 1px 3px rgba(25,20,15,.04);
+    --sh-2: 0 6px 18px rgba(25,20,15,.08);
+    --sh-3: 0 16px 40px rgba(25,20,15,.14);
+    --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --font-dot: 'Doto', 'JetBrains Mono', monospace;
     --ico-sm: 16px; --ico-md: 20px; --ico-lg: 24px;
+    --side-w: 320px; --top-h: 60px;
+    --ease: cubic-bezier(.22,.61,.36,1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font-ui); background: var(--color-background);
-    color: var(--color-foreground); line-height: 1.55; -webkit-font-smoothing: antialiased; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-  a { color: var(--color-accent); text-decoration: none; }
+  html, body { height: 100%; }
+  body { font-family: var(--font-ui); background: var(--paper); color: var(--ink);
+    line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    overflow: hidden; }
+  a { color: var(--red-deep); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
   .ico { width: var(--ico-md); height: var(--ico-md); stroke: currentColor; fill: none;
-    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
   .ico-sm { width: var(--ico-sm); height: var(--ico-sm); }
   .ico-lg { width: var(--ico-lg); height: var(--ico-lg); }
-
-  /* focus */
-  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 4px; }
   button, input, select { font-family: inherit; }
 
-  /* nav */
-  nav { position: sticky; top: 0; background: rgba(248,250,252,.85); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--color-border); z-index: 100; }
-  nav .wrap { display: flex; justify-content: space-between; align-items: center; height: 60px; gap: 16px; }
-  .brand { font-weight: 700; font-size: 18px; display: inline-flex; align-items: center; gap: 8px; color: var(--color-primary); }
-  .brand .ico { color: var(--color-accent); }
-  .nav-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
-  .nav-link { color: var(--color-muted); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
-  .nav-link:hover { color: var(--color-foreground); text-decoration: none; }
-  .nav-badge { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid var(--color-border); background: var(--color-surface); }
+  /* ============ APP SHELL (two-pane) ============ */
+  .app { display: grid; grid-template-columns: var(--side-w) 1fr; height: 100dvh; }
+
+  /* faint blueprint grid behind everything */
+  .app::before {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(var(--line-2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(120% 80% at 70% 0%, #000 0%, transparent 75%);
+            mask-image: radial-gradient(120% 80% at 70% 0%, #000 0%, transparent 75%);
+  }
+
+  /* ============ SIDEBAR (chat-like history) ============ */
+  .sidebar { position: relative; z-index: 5; background: var(--paper-2);
+    border-right: 1px solid var(--line); display: flex; flex-direction: column; height: 100dvh; }
+  .side-head { padding: 16px 16px 12px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700;
+    font-size: 16px; color: var(--ink); letter-spacing: -.01em; }
+  .brand-mark { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 32px; }
+  .brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .brand-name { font-family: var(--font-dot); font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+
+  .new-scan { margin: 4px 16px 12px; height: 44px; width: calc(100% - 32px);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--ink); color: var(--paper); border: none; border-radius: var(--r-md);
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: transform .08s var(--ease), background .2s; }
+  .new-scan:hover { background: #2a231b; }
+  .new-scan:active { transform: scale(.98); }
+
+  .side-search { margin: 0 16px 12px; position: relative; }
+  .side-search .ico { position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    width: 15px; height: 15px; color: var(--ink-3); pointer-events: none; }
+  .side-search input { width: 100%; height: 38px; padding: 0 12px 0 34px; font-size: 13px;
+    border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+    color: var(--ink); transition: border-color .15s, box-shadow .15s; }
+  .side-search input:focus { outline: none; border-color: var(--ink-3); box-shadow: 0 0 0 3px rgba(25,20,15,.06); }
+
+  .hist-label { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+    letter-spacing: .14em; color: var(--ink-3); padding: 4px 18px 8px; text-transform: uppercase; }
+  .hist-scroll { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+  .hist-empty { color: var(--ink-3); font-size: 13px; padding: 12px 6px; line-height: 1.6; }
+
+  /* chat-style scan rows */
+  .scan-item { position: relative; border: 1px solid transparent; border-radius: var(--r-md);
+    padding: 11px 12px; margin-bottom: 6px; cursor: pointer; background: transparent;
+    transition: background .15s var(--ease), border-color .15s, transform .12s var(--ease);
+    animation: histIn .4s var(--ease) both; }
+  .scan-item:hover { background: var(--surface); border-color: var(--line); }
+  .scan-item.active { background: var(--surface); border-color: var(--ink); box-shadow: var(--sh-1); }
+  .scan-item.active::before { content: ''; position: absolute; left: -1px; top: 9px; bottom: 9px;
+    width: 3px; border-radius: 3px; background: var(--red); }
+  .si-top { display: flex; align-items: center; gap: 8px; }
+  .si-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: var(--ink-3); }
+  .si-title { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .si-sub { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; padding-left: 16px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .si-del { margin-left: auto; flex: 0 0 auto; width: 26px; height: 26px; display: grid;
+    place-items: center; border: none; background: transparent; color: var(--ink-3);
+    border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+  .scan-item:hover .si-del { opacity: 1; }
+  .si-del:hover { background: var(--red-soft); color: var(--red); }
+  .si-del .ico { width: 15px; height: 15px; }
+  .si-del.confirm { opacity: 1; background: var(--red); color: #fff; width: auto; padding: 0 8px;
+    font-size: 11px; font-weight: 700; font-family: var(--font-ui); }
+
+  .side-foot { border-top: 1px solid var(--line); padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .status-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px;
+    color: var(--ink-2); font-family: var(--font-mono); }
+  .status-pill .live { width: 8px; height: 8px; border-radius: 50%; background: var(--ok);
+    box-shadow: 0 0 0 3px rgba(47,125,79,.18); }
+  .status-pill .live.pulse { animation: pulse 2s ease-in-out infinite; }
+  .foot-link { color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+  .foot-link:hover { color: var(--ink); text-decoration: none; }
+
+  /* ============ MAIN ============ */
+  .main { position: relative; z-index: 1; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: var(--top-h); flex: 0 0 var(--top-h); border-bottom: 1px solid var(--line);
+    background: rgba(244,241,234,.82); backdrop-filter: blur(10px); display: flex;
+    align-items: center; gap: 12px; padding: 0 24px; z-index: 10; }
+  .menu-btn { display: none; width: 38px; height: 38px; border: 1px solid var(--line);
+    background: var(--surface); border-radius: var(--r-md); cursor: pointer; place-items: center; color: var(--ink); }
+  .crumb { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); letter-spacing: .02em;
+    display: inline-flex; align-items: center; gap: 8px; overflow: hidden; }
+  .crumb b { color: var(--ink); font-weight: 600; }
+  .crumb .slash { color: var(--ink-3); }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .nav-badge { font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface);
+    color: var(--ink); font-family: var(--font-mono); }
   .nav-badge .nb-dot { width: 8px; height: 8px; border-radius: 50%; }
-  .nav-cta { font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: var(--r-md);
-    background: var(--color-primary); color: var(--color-on-primary); transition: background .2s ease; }
-  .nav-cta:hover { background: var(--color-secondary); text-decoration: none; }
+  .lang-btn { height: 30px; padding: 0 10px; border-radius: var(--r-pill); border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; cursor: pointer; }
+  .lang-btn:hover { background: var(--surface-2); }
 
-  /* hero */
-  .hero { padding: 104px 24px 72px; text-align: center; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border);
-    border-radius: var(--r-pill); padding: 6px 14px; font-size: 13px; color: var(--color-muted);
-    margin-bottom: 28px; background: var(--color-surface); }
-  .pill .live { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(21,128,61,.15); }
-  h1 { font-size: clamp(2.5rem, 8vw, 5.25rem); font-weight: 800; line-height: 1.04;
-    letter-spacing: -0.04em; color: var(--color-primary); }
-  .subtitle { color: var(--color-muted); font-size: clamp(1rem, 2.2vw, 1.18rem); max-width: 580px; margin: 24px auto 0; }
-  .hero-actions { display: flex; gap: 12px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
+  .canvas { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  .canvas-inner { max-width: 920px; margin: 0 auto; padding: 32px 32px 96px; }
+  .hidden { display: none !important; }
+  section.block { margin-bottom: 28px; animation: rise .45s var(--ease) both; }
 
-  /* card + form */
-  .card { border: 1px solid var(--color-border); border-radius: var(--r-lg); padding: 24px;
-    background: var(--color-surface); box-shadow: var(--sh-1); }
-  .scan-card { max-width: 680px; margin: 0 auto 48px; }
-  label.field-label { display: block; font-size: 13px; font-weight: 500; color: var(--color-secondary); margin-bottom: 6px; }
-  .helper { font-size: 12px; color: var(--color-muted); margin-top: 6px; }
-  input, select { font-size: 15px; border: 1px solid var(--color-border); border-radius: var(--r-md);
-    height: 46px; padding: 0 14px; width: 100%; background: var(--color-surface); color: var(--color-foreground);
-    transition: border-color .15s ease, box-shadow .15s ease; }
-  input::placeholder { color: #94A3B8; }
-  input:focus, select:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-  input.invalid { border-color: var(--color-destructive); }
+  /* ---- pills / tags (image motif) ---- */
+  .tag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+    border-radius: var(--r-pill); padding: 4px 11px; font-family: var(--font-mono);
+    font-size: 11px; font-weight: 500; color: var(--ink-2); background: var(--surface); letter-spacing: .03em; }
+
+  /* ============ EMPTY / HERO ============ */
+  .hero { text-align: center; padding: 36px 0 8px; }
+  .hero-graph { position: relative; height: 168px; margin: 0 auto 6px; max-width: 720px; }
+  .hero-graph svg { width: 100%; height: 100%; overflow: visible; }
+  .hg-line { fill: none; stroke: var(--red); stroke-width: 1.6;
+    stroke-dasharray: 6 5; stroke-dashoffset: 220; animation: draw 1.4s var(--ease) forwards; }
+  .hg-pill rect { fill: var(--surface); stroke: var(--line); }
+  .hg-pill text { font-family: var(--font-mono); font-size: 10px; fill: var(--ink-2); letter-spacing: .04em; }
+  .hg-pill { opacity: 0; animation: fadeIn .4s var(--ease) forwards; }
+  .hg-core { filter: drop-shadow(0 6px 14px rgba(25,20,15,.18)); }
+
+  .hero h1 { font-family: var(--font-dot); font-weight: 800; font-size: clamp(2.4rem, 7vw, 4.2rem);
+    line-height: .98; letter-spacing: .01em; color: var(--ink); text-transform: uppercase; }
+  .hero h1 .lcd { display: inline-block; animation: flicker .9s steps(1) 1; }
+  .hero .sub { color: var(--ink-2); font-size: clamp(1rem, 2vw, 1.12rem); max-width: 540px; margin: 18px auto 0; }
+  .toolkit { margin: 20px auto 0; max-width: 860px; }
+  .toolkit-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .toolkit-head h2 { font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-family: var(--font-mono); color: var(--ink-2); }
+  .toolkit-head .note { font-size: 12px; color: var(--ink-3); }
+  .tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tool-card { text-align: left; padding: 16px; min-height: 148px; display: flex; flex-direction: column; gap: 10px; }
+  .tool-link { width: 100%; border: 1px solid var(--line); cursor: pointer; transition: transform .12s var(--ease), box-shadow .2s, border-color .2s; }
+  .tool-link:hover { transform: translateY(-2px); box-shadow: var(--sh-2); border-color: var(--ink); }
+  .tool-link:active { transform: translateY(0); }
+  .tool-card .tool-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); }
+  .tool-card .tool-name { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .tool-card .tool-desc { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+  .tool-card .tool-meta { margin-top: auto; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); }
+
+  /* ============ SCAN FORM ============ */
+  .card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-1); }
+  .card.pad { padding: 22px; }
+  .scan-card { max-width: 660px; margin: 28px auto 0; padding: 24px; }
+  .scan-card .form-head { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; }
+  .scan-card .form-head .tag { background: var(--red-soft); border-color: var(--sev-crit-bd); color: var(--red-deep); }
+  label.field-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink);
+    margin-bottom: 6px; letter-spacing: .01em; }
+  .helper { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  input, select { font-size: 14.5px; border: 1px solid var(--line); border-radius: var(--r-md);
+    height: 46px; padding: 0 14px; width: 100%; background: var(--surface); color: var(--ink);
+    transition: border-color .15s, box-shadow .15s; }
+  input::placeholder { color: var(--ink-3); }
+  input:focus, select:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(25,20,15,.07); }
+  input.invalid { border-color: var(--red); box-shadow: 0 0 0 3px rgba(229,52,42,.12); }
   .field { margin-bottom: 16px; }
   .row { display: flex; gap: 12px; margin-bottom: 16px; }
   .row .grow { flex: 1; }
-  .row .model { flex: 0 0 180px; }
-  .check-row { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 20px; font-size: 14px; color: var(--color-secondary); }
-  .check-row input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--color-accent); cursor: pointer; }
+  .row .model { flex: 0 0 190px; }
+  .check-row { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0 20px; font-size: 13.5px; color: var(--ink-2); }
+  .check-row input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--red); cursor: pointer; margin-top: 1px; }
   .check-row label { cursor: pointer; }
 
-  .btn { height: 46px; background: var(--color-primary); color: var(--color-on-primary); border: none;
-    border-radius: var(--r-md); font-size: 15px; font-weight: 500; cursor: pointer; width: 100%;
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    transition: background .2s ease, transform .08s ease; }
-  .btn:hover { background: var(--color-secondary); }
+  .btn { height: 46px; background: var(--ink); color: var(--paper); border: none; border-radius: var(--r-md);
+    font-size: 14.5px; font-weight: 600; cursor: pointer; width: 100%; display: inline-flex;
+    align-items: center; justify-content: center; gap: 8px; transition: background .2s, transform .08s var(--ease); }
+  .btn:hover { background: #2a231b; }
   .btn:active { transform: scale(.985); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn-accent { background: var(--color-accent); }
-  .btn-accent:hover { background: var(--color-accent-hover); }
-  .btn-ghost { background: var(--color-surface); color: var(--color-foreground); border: 1px solid var(--color-border); }
-  .btn-ghost:hover { background: var(--color-background); }
-  .btn-sm { height: 40px; width: auto; padding: 0 18px; font-size: 14px; }
+  /* the one glossy red CTA (image hero button) */
+  .btn-red { background: linear-gradient(180deg, #F0463C 0%, var(--red) 55%, var(--red-deep) 100%);
+    box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 16px rgba(229,52,42,.32); position: relative; overflow: hidden; }
+  .btn-red::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg,
+    transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%); transform: translateX(-120%); }
+  .btn-red:hover { background: linear-gradient(180deg, #F2554B 0%, var(--red) 55%, var(--red-deep) 100%); }
+  .btn-red:hover::after { transform: translateX(120%); transition: transform .7s var(--ease); }
+  .btn-ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-sm { height: 40px; width: auto; padding: 0 18px; font-size: 13.5px; }
 
-  .hidden { display: none !important; }
-  section.block { margin-bottom: 36px; }
-
-  /* progress */
-  .progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .progress-head h3 { font-size: 16px; font-weight: 600; }
-  .progress-meta { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); }
-  .steps { list-style: none; }
-  .steps li { display: flex; align-items: center; gap: 12px; padding: 9px 0; color: var(--color-muted); font-size: 15px; }
-  .steps .marker { width: 22px; height: 22px; flex: 0 0 22px; display: grid; place-items: center; }
-  .steps .marker .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-border); }
+  /* ============ PROGRESS ============ */
+  .progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 22px 22px 0; }
+  .progress-head h3 { font-size: 15px; font-weight: 600; display: inline-flex; gap: 8px; align-items: center; }
+  .progress-meta { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-2); }
+  .steps { list-style: none; padding: 6px 22px 22px; position: relative; }
+  .steps::before { content: ''; position: absolute; left: calc(22px + 10px); top: 24px; bottom: 30px; width: 2px; background: var(--line); }
+  .steps li { position: relative; display: flex; align-items: center; gap: 14px; padding: 8px 0; color: var(--ink-3); font-size: 14.5px; }
+  .steps .marker { width: 22px; height: 22px; flex: 0 0 22px; display: grid; place-items: center; z-index: 1; background: var(--surface); border-radius: 50%; }
+  .steps .marker .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--line); }
   .steps .marker .ico { display: none; }
-  .steps li.active { color: var(--color-foreground); }
+  .steps li.active { color: var(--ink); font-weight: 500; }
   .steps li.active .dot { display: none; }
-  .steps li.active .marker .spin { display: block; color: var(--color-accent); animation: spin 1s linear infinite; }
-  .steps li.done { color: var(--color-foreground); }
+  .steps li.active .marker .spin { display: block; color: var(--red); animation: spin 1s linear infinite; }
+  .steps li.done { color: var(--ink-2); }
   .steps li.done .dot { display: none; }
-  .steps li.done .marker .check { display: block; color: var(--ok); animation: pop .2s ease; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .steps li.done .marker .check { display: block; color: var(--ok); animation: pop .25s var(--ease); }
 
-  /* results */
-  .risk-card { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-  .risk-score { font-family: var(--font-mono); font-size: 44px; font-weight: 600; line-height: 1; }
-  .risk-info .risk-label { font-weight: 600; font-size: 16px; }
-  .risk-info .risk-sub { color: var(--color-muted); font-size: 13px; margin-top: 2px; }
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-  .kpi { border: 1px solid var(--color-border); border-radius: var(--r-md); padding: 14px 16px; background: var(--color-surface);
-    cursor: pointer; transition: box-shadow .2s ease, transform .08s ease, border-color .2s ease; text-align: left; }
-  .kpi:hover { box-shadow: var(--sh-2); }
+  /* ============ RESULTS ============ */
+  .result-head { display: flex; align-items: stretch; gap: 16px; flex-wrap: wrap; }
+  .risk-card { display: flex; align-items: center; gap: 18px; padding: 20px 22px; flex: 1 1 280px; }
+  .risk-score { font-family: var(--font-dot); font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: .01em; }
+  .risk-info .risk-label { font-weight: 700; font-size: 15px; }
+  .risk-info .risk-sub { color: var(--ink-2); font-size: 12.5px; margin-top: 3px; }
+  .scan-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 4px; }
+  .scan-chip { border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface);
+    padding: 5px 11px; font-size: 11.5px; color: var(--ink-2); font-family: var(--font-mono); }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 0; }
+  .kpi { border: 1px solid var(--line); border-radius: var(--r-md); padding: 15px 16px; background: var(--surface);
+    cursor: pointer; transition: box-shadow .2s, transform .1s var(--ease), border-color .2s; text-align: left; }
+  .kpi:hover { box-shadow: var(--sh-2); transform: translateY(-2px); }
   .kpi:active { transform: scale(.99); }
-  .kpi.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
-  .kpi .kpi-count { font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1; }
-  .kpi .kpi-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; margin-top: 6px; }
+  .kpi.active { border-color: var(--ink); box-shadow: 0 0 0 2px rgba(25,20,15,.12); }
+  .kpi .kpi-count { font-family: var(--font-dot); font-size: 30px; font-weight: 700; line-height: 1; }
+  .kpi .kpi-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-top: 7px; font-family: var(--font-mono); }
   .kpi.crit .kpi-count, .kpi.crit .kpi-label { color: var(--sev-crit); }
   .kpi.high .kpi-count, .kpi.high .kpi-label { color: var(--sev-high); }
   .kpi.med  .kpi-count, .kpi.med  .kpi-label { color: var(--sev-med); }
   .kpi.low  .kpi-count, .kpi.low  .kpi-label { color: var(--sev-low); }
-  .meta { color: var(--color-muted); font-size: 13px; }
-  .scan-meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
-  .scan-chip { border: 1px solid var(--color-border); border-radius: var(--r-pill); background: var(--color-surface); padding: 5px 10px; font-size: 12px; color: var(--color-secondary); }
-  .status-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 16px; }
-  .status-card { border: 1px solid var(--color-border); border-radius: var(--r-md); padding: 12px 14px; background: var(--color-surface); }
+
+  .status-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 18px 0 0; }
+  .status-card { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 13px; background: var(--surface); }
   .status-card.ok { border-color: var(--ok-bd); background: var(--ok-bg); }
   .status-card.err { border-color: var(--sev-crit-bd); background: var(--sev-crit-bg); }
-  .status-name { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-  .status-line { font-size: 13px; color: var(--color-secondary); margin-top: 5px; }
-  .scan-list { display: grid; gap: 10px; }
-  .scan-item { border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface); padding: 12px 14px; display: flex; gap: 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-  .scan-item.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
-  .scan-item .scan-title { font-weight: 600; font-size: 14px; }
-  .scan-item .scan-sub { font-size: 12px; color: var(--color-muted); margin-top: 4px; }
-  .scan-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-name { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; font-family: var(--font-mono); }
+  .status-line { font-size: 12px; color: var(--ink-2); margin-top: 5px; }
 
-  /* findings — dense */
-  .group-head { position: sticky; top: 60px; background: var(--color-background); z-index: 40;
-    font-size: 13px; font-weight: 700; letter-spacing: .05em; padding: 14px 0 8px;
-    display: flex; align-items: center; gap: 8px; }
-  details.finding { border: 1px solid var(--color-border); border-radius: var(--r-md); margin-bottom: 8px;
-    background: var(--color-surface); overflow: hidden; }
-  details.finding summary { list-style: none; cursor: pointer; padding: 11px 14px; min-height: 36px;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; transition: background .15s ease; }
-  details.finding summary:hover { background: var(--color-background); }
+  /* ============ FINDINGS ============ */
+  .findings-title { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    color: var(--ink-3); text-transform: uppercase; margin: 4px 0 14px; }
+  .group-head { position: sticky; top: 0; background: var(--paper); z-index: 6;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .06em;
+    padding: 12px 0 8px; display: flex; align-items: center; gap: 8px; }
+  details.finding { border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: 8px;
+    background: var(--surface); overflow: hidden; animation: rise .4s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+  details.finding summary { list-style: none; cursor: pointer; padding: 12px 14px; min-height: 36px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; transition: background .15s; }
+  details.finding summary:hover { background: var(--surface-2); }
   summary::-webkit-details-marker { display: none; }
-  .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill);
-    display: inline-flex; align-items: center; gap: 4px; border: 1px solid; }
+  .badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill);
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid; font-family: var(--font-mono); letter-spacing: .02em; }
   .badge .ico { width: 12px; height: 12px; }
   .badge.crit { color: var(--sev-crit); background: var(--sev-crit-bg); border-color: var(--sev-crit-bd); }
   .badge.high { color: var(--sev-high); background: var(--sev-high-bg); border-color: var(--sev-high-bd); }
   .badge.med  { color: var(--sev-med);  background: var(--sev-med-bg);  border-color: var(--sev-med-bd); }
   .badge.low  { color: var(--sev-low);  background: var(--sev-low-bg);  border-color: var(--sev-low-bd); }
   .badge.info { color: var(--sev-info); background: var(--sev-info-bg); border-color: var(--sev-info-bd); }
-  .cat { font-size: 12px; color: var(--color-muted); display: inline-flex; align-items: center; gap: 5px; }
+  .cat { font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); }
   .cat .ico { width: 14px; height: 14px; }
   .ftitle { font-weight: 500; font-size: 14px; }
-  .floc { font-family: var(--font-mono); font-size: 12px; color: var(--color-muted); }
-  .chev { margin-left: auto; color: var(--color-muted); transition: transform .2s ease; }
+  .floc { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+  .chev { margin-left: auto; color: var(--ink-3); transition: transform .25s var(--ease); }
   details[open] .chev { transform: rotate(180deg); }
-  .fixable { color: var(--ok); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
-  .fbody { padding: 4px 14px 16px; border-top: 1px solid var(--color-border); }
+  .fixable { color: var(--ok); font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .fbody { padding: 4px 14px 16px; border-top: 1px solid var(--line); }
   .fbody p { margin: 10px 0; font-size: 14px; }
-  .path-pill { font-family: var(--font-mono); font-size: 12px; background: var(--color-background);
-    border: 1px solid var(--color-border); border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer; color: var(--color-secondary); }
-  .path-pill:hover { background: #EEF2F6; }
-  .cve { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; background: var(--sev-crit-bg);
-    color: var(--sev-crit); border: 1px solid var(--sev-crit-bd); border-radius: var(--r-sm); padding: 2px 8px; margin: 2px 4px 2px 0; }
-  .cve:hover { text-decoration: none; background: #FEE2E2; }
-  pre { background: var(--color-primary); color: #E2E8F0; border-radius: var(--r-md); padding: 12px;
-    overflow-x: auto; font-family: var(--font-mono); font-size: 13px; }
+  .path-pill { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer; color: var(--ink-2); }
+  .path-pill:hover { background: var(--paper-2); }
+  .cve { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; background: var(--sev-crit-bg);
+    color: var(--sev-crit); border: 1px solid var(--sev-crit-bd); border-radius: var(--r-sm); padding: 2px 8px; margin: 2px 4px 2px 0; font-family: var(--font-mono); }
+  .cve:hover { text-decoration: none; background: #F7D9D5; }
+  pre { background: var(--ink); color: #E8E3D8; border-radius: var(--r-md); padding: 12px;
+    overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; }
   code { font-family: var(--font-mono); font-size: .9em; }
-  .fbody > p code { background: var(--color-background); padding: 1px 5px; border-radius: 4px; }
+  .fbody > p code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-2); }
 
-  /* clean / empty */
-  .clean { text-align: center; padding: 40px 24px; color: var(--ok); }
+  .clean { text-align: center; padding: 44px 24px; color: var(--ok); }
   .clean .ico { width: 48px; height: 48px; margin-bottom: 12px; }
 
-  /* PR + report */
-  .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  /* ============ PR + REPORT ============ */
+  .card-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .btn-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-  .pr-item { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
-  .report h2 { border-bottom: 1px solid var(--color-border); padding-bottom: 6px; margin: 24px 0 12px; font-size: 20px; color: var(--color-primary); }
+  .pr-item { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 14px; }
+  .pr-item input { width: 18px; height: 18px; flex: 0 0 18px; accent-color: var(--red); }
+  /* report: keep ALL content inside the card — no horizontal bleed */
+  .report { max-width: 72ch; overflow-wrap: anywhere; word-break: break-word; }
+  .report > * { max-width: 100%; }
+  .report h1 { font-size: 22px; margin: 8px 0 12px; }
+  .report h2 { border-bottom: 1px solid var(--line); padding-bottom: 6px; margin: 24px 0 12px; font-size: 19px; }
   .report h3 { margin: 18px 0 8px; font-size: 16px; }
+  .report h4 { margin: 14px 0 6px; font-size: 14px; }
   .report ul, .report ol { padding-left: 22px; }
   .report li { margin: 4px 0; }
   .report p { margin: 10px 0; }
-  .report pre { margin: 12px 0; }
-  .report table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
-  .report th, .report td { border: 1px solid var(--color-border); padding: 6px 10px; text-align: left; }
-  .skeleton { height: 16px; border-radius: 4px; background: linear-gradient(90deg, #EEF2F6 25%, #E2E8F0 50%, #EEF2F6 75%);
+  .report a { overflow-wrap: anywhere; }
+  .report blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid var(--line);
+    color: var(--ink-2); background: var(--surface-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+  .report img { max-width: 100%; height: auto; }
+  /* fenced code: wrap long lines instead of pushing the card wider */
+  .report pre { margin: 12px 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  .report p code, .report li code { overflow-wrap: anywhere; }
+  /* wide tables scroll within their own band, never the page */
+  .report table { display: block; width: 100%; max-width: 100%; overflow-x: auto;
+    border-collapse: collapse; margin: 12px 0; font-size: 13.5px; -webkit-overflow-scrolling: touch; }
+  .report th, .report td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; white-space: nowrap; }
+  .report th { background: var(--surface-2); position: sticky; top: 0; }
+  .skeleton { height: 16px; border-radius: 4px; background: linear-gradient(90deg, #EEEAE0 25%, #E2DDD2 50%, #EEEAE0 75%);
     background-size: 200% 100%; animation: shimmer 1.4s infinite; margin: 10px 0; }
   .skeleton.w70 { width: 70%; } .skeleton.w90 { width: 90%; } .skeleton.w50 { width: 50%; }
-  @keyframes shimmer { to { background-position: -200% 0; } }
-  .err { color: var(--color-destructive); border: 1px solid var(--sev-crit-bd); background: var(--sev-crit-bg);
+  .err { color: var(--red-deep); border: 1px solid var(--sev-crit-bd); background: var(--sev-crit-bg);
     border-radius: var(--r-md); padding: 16px; display: flex; align-items: flex-start; gap: 10px; }
 
-  /* responsive */
-  @media (max-width: 768px) {
-    .hero { padding: 72px 20px 56px; }
-    .kpis { grid-template-columns: repeat(2, 1fr); }
-    .row { flex-direction: column; }
-    .row .model { flex: 1; }
-    .group-head { top: 56px; }
-    details.finding summary { flex-direction: row; }
-    .floc { flex-basis: 100%; }
+  /* ============ KEYFRAMES ============ */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(47,125,79,.18); } 50% { box-shadow: 0 0 0 6px rgba(47,125,79,0); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes histIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { to { opacity: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes flicker {
+    0% { opacity: .2; } 10% { opacity: 1; } 20% { opacity: .35; } 30% { opacity: 1; }
+    45% { opacity: .55; } 60% { opacity: 1; } 100% { opacity: 1; }
   }
 
-  /* motion off */
+  .icon-btn { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink-2); border-radius: var(--r-md); cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s; }
+  .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+  .icon-btn .ico { width: 17px; height: 17px; }
+
+  .toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex;
+    flex-direction: column; gap: 10px; pointer-events: none; max-width: min(380px, 90vw); }
+  .toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--ink-3);
+    border-radius: var(--r-md); box-shadow: var(--sh-2); font-size: 13.5px; color: var(--ink);
+    animation: toastIn .28s var(--ease) both; }
+  .toast.out { animation: toastOut .22s var(--ease) forwards; }
+  .toast.ok { border-left-color: var(--ok); } .toast.ok .ico { color: var(--ok); }
+  .toast.err { border-left-color: var(--red); } .toast.err .ico { color: var(--red); }
+  .toast.info .ico { color: var(--ink-2); }
+  .toast .ico { width: 18px; height: 18px; flex: 0 0 18px; margin-top: 1px; }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  @keyframes toastOut { to { opacity: 0; transform: translateX(16px); } }
+
+  .hist-group { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .1em;
+    color: var(--ink-3); text-transform: uppercase; padding: 12px 6px 6px; display: flex; align-items: center; gap: 6px; }
+  .hist-group::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .hist-skel { height: 46px; border-radius: var(--r-md); margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+    background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+
+  .find-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; }
+  .find-search { position: relative; flex: 1 1 220px; min-width: 160px; }
+  .find-search .ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--ink-3); pointer-events: none; }
+  .find-search input { height: 38px; padding: 0 10px 0 32px; font-size: 13px; width: 100%; }
+  .find-sort { height: 38px; width: auto; padding: 0 10px; font-size: 13px; flex: 0 0 auto; }
+  .cat-chip { height: 30px; padding: 0 11px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .03em;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: var(--r-pill);
+    cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 5px; }
+  .cat-chip:hover { border-color: var(--ink-3); color: var(--ink); }
+  .cat-chip.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .find-actions { margin-left: auto; display: flex; gap: 8px; }
+
+  .trend-card { padding: 18px 20px; margin-top: 16px; }
+  .trend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+  .trend-title { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); display: inline-flex; align-items: center; gap: 7px; }
+  .trend-legend { display: flex; gap: 14px; font-size: 11px; color: var(--ink-2); }
+  .trend-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+  .trend-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .trend-canvas-wrap { position: relative; width: 100%; height: 160px; }
+  .trend-canvas-wrap canvas { width: 100%; height: 100%; display: block; }
+  .trend-empty { color: var(--ink-3); font-size: 13px; padding: 28px 0; text-align: center; }
+
+  .ep-section { margin-top: 16px; }
+  .ep-head { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .ep-list { display: grid; gap: 10px; }
+  .ep-card { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 14px 16px; }
+  .ep-card.confirmed { border-color: var(--sev-crit-bd); background: var(--sev-crit-bg); }
+  .ep-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ep-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface-2); }
+  .ep-badge.confirmed { color: var(--sev-crit); border-color: var(--sev-crit-bd); background: #fff; }
+  .ep-badge.inferred { color: var(--sev-med); border-color: var(--sev-med-bd); }
+  .ep-title { font-weight: 600; font-size: 14px; color: var(--ink); flex: 1 1 200px; }
+  .ep-body { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+  .ep-ids { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+  .target-suggest { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .target-suggest-label { font-size: 12px; color: var(--ink-2); margin-right: 4px; }
+  .target-chip { height: 30px; padding: 0 11px; font-family: var(--font-mono); font-size: 11px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: var(--r-pill);
+    cursor: pointer; transition: all .15s; }
+  .target-chip:hover { border-color: var(--red-deep); color: var(--red-deep); background: var(--red-soft); }
+
+  .diff-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .diff-bar select { height: 36px; width: auto; padding: 0 10px; font-size: 13px; }
+  .diff-panel { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .diff-panel:empty { display: none; }
+  .diff-col { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 12px 14px; }
+  .diff-col h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .diff-col.new h4 { color: var(--red); } .diff-col.resolved h4 { color: var(--ok); }
+  .diff-row { font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid var(--line-2); display: flex; gap: 7px; align-items: baseline; }
+  .diff-row:last-child { border-bottom: none; }
+  .diff-row .dsev { font-family: var(--font-mono); font-size: 10px; font-weight: 700; flex: 0 0 auto; }
+  .diff-none { color: var(--ink-3); font-size: 12.5px; padding: 8px 0; }
+  @media (max-width: 700px) { .diff-panel { grid-template-columns: 1fr; } }
+
+  /* ============ MOBILE ============ */
+  .scrim { display: none; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 86vw; max-width: var(--side-w); z-index: 60;
+      transform: translateX(-100%); transition: transform .28s var(--ease); box-shadow: var(--sh-3); }
+    .app.nav-open .sidebar { transform: none; }
+    .menu-btn { display: grid; }
+    .scrim { display: block; position: fixed; inset: 0; background: rgba(25,20,15,.4); z-index: 50; opacity: 0;
+      pointer-events: none; transition: opacity .25s; }
+    .app.nav-open .scrim { opacity: 1; pointer-events: auto; }
+    .canvas-inner { padding: 22px 18px 80px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .status-grid { grid-template-columns: repeat(2, 1fr); }
+    .row { flex-direction: column; }
+    .row .model { flex: 1; }
+  }
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation: none !important; transition: none !important; }
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    .hg-line { stroke-dashoffset: 0; } .hg-pill { opacity: 1; }
   }
 </style>
 </head>
@@ -266,159 +505,631 @@
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 1.5 5 1.5 5 1.5c-.28 1.15-.28 2.35 0 3.5a5.4 5.4 0 0 0-1 3.5c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
 </svg>
 
-<nav><div class="wrap">
-  <span class="brand"><svg class="ico"><use href="#i-shield"/></svg> CoSentinel</span>
-  <span class="nav-right">
-    <span class="nav-badge hidden" id="navBadge"></span>
-    <a class="nav-link" href="https://github.com" target="_blank"><svg class="ico ico-sm"><use href="#i-github"/></svg> GitHub</a>
-    <a class="nav-cta" href="#scanCard">Scan a Repo</a>
-  </span>
-</div></nav>
+<div class="app" id="app">
 
-<div class="hero">
-  <span class="pill"><span class="live" id="liveDot"></span><span id="liveText">AI-Powered Security · Open Source</span></span>
-  <h1>Secure Your Code<br>Before It Ships</h1>
-  <p class="subtitle">CoSentinel scans your GitHub repository for vulnerabilities, exposed secrets, and misconfigurations — then shows you exactly how to fix them.</p>
-  <div class="hero-actions">
-    <a class="btn btn-accent btn-sm" href="#scanCard">Scan a Repository</a>
-    <a class="btn btn-ghost btn-sm" href="https://github.com" target="_blank">View on GitHub</a>
-  </div>
-</div>
-
-<div class="wrap">
-
-  <div class="card scan-card" id="scanCard">
-    <div class="field">
-      <label class="field-label" for="repoUrl">GitHub Repository URL</label>
-      <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
-      <div class="helper" id="urlHelper">Public or private. Paste the full repository URL.</div>
+  <!-- ============ SIDEBAR : chat-like history ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <span class="brand">
+        <span class="brand-mark"><img src="/static/COSENTINEL.svg" alt="CoSentinel logo"></span>
+        <span class="brand-name">CoSentinel</span>
+      </span>
     </div>
-    <div class="row">
-      <div class="grow">
-        <label class="field-label" for="token">GitHub Token</label>
-        <input id="token" type="password" placeholder="ghp_…" autocomplete="off">
-        <div class="helper">Only needed for private repositories.</div>
-      </div>
-      <div class="model">
-        <label class="field-label" for="model">AI Model</label>
-        <select id="model"><option>loading…</option></select>
+    <button class="new-scan" id="newScanBtn"><svg class="ico ico-sm"><use href="#i-plus"/></svg> Nuova scansione</button>
+    <div class="side-search">
+      <svg class="ico"><use href="#i-search"/></svg>
+      <input id="historySearch" type="text" placeholder="Cerca nella cronologia…" autocomplete="off">
+    </div>
+    <div class="hist-label"><svg class="ico" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px"><use href="#i-history"/></svg><span id="histLabelText">Cronologia scansioni</span></div>
+    <div class="hist-scroll" id="historySection">
+      <div class="scan-list" id="scanHistory">
+        <div class="hist-empty">Nessuna scansione ancora. Avvia la prima per creare la cronologia.</div>
       </div>
     </div>
-    <div class="check-row">
-      <input type="checkbox" id="auth">
-      <label for="auth">I confirm this repository is authorized for security testing.</label>
+    <div class="side-foot">
+      <span class="status-pill"><span class="live pulse" id="liveDot"></span><span id="liveText">Connessione in corso…</span></span>
+      <a class="foot-link" href="https://github.com" target="_blank"><svg class="ico ico-sm"><use href="#i-github"/></svg> GitHub</a>
     </div>
-    <button class="btn" id="scanBtn" disabled>
-      <svg class="ico ico-sm"><use href="#i-shield"/></svg> Start Security Scan
-    </button>
-  </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
 
-  <section class="block hidden" id="progress">
-    <div class="card">
-      <div class="progress-head">
-        <h3>Scanning repository…</h3>
-        <span class="progress-meta"><span id="stepCounter">Step 1 of 7</span> · <span id="timer">0.0s</span></span>
+  <!-- ============ MAIN : report / canvas ============ -->
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Toggle history"><svg class="ico"><use href="#i-menu"/></svg></button>
+      <span class="crumb" id="crumb"><b>Nuova scansione</b></span>
+      <span class="top-right">
+        <span class="nav-badge hidden" id="navBadge"></span>
+        <button class="lang-btn" id="langToggle" aria-label="Seleziona lingua">EN</button>
+      </span>
+    </header>
+
+    <div class="canvas" id="canvas">
+      <div class="canvas-inner">
+
+        <!-- EMPTY / HERO -->
+        <section id="heroEmpty">
+          <div class="hero">
+            <div class="hero-graph" aria-hidden="true">
+              <svg viewBox="0 0 720 168" preserveAspectRatio="xMidYMid meet">
+                <path class="hg-line" d="M120 40 C 250 40, 280 84, 360 84" style="animation-delay:.1s"/>
+                <path class="hg-line" d="M120 128 C 250 128, 280 84, 360 84" style="animation-delay:.25s"/>
+                <path class="hg-line" d="M600 40 C 470 40, 440 84, 360 84" style="animation-delay:.4s"/>
+                <path class="hg-line" d="M600 128 C 470 128, 440 84, 360 84" style="animation-delay:.55s"/>
+                <g class="hg-pill" style="animation-delay:.2s"><rect x="40" y="28" rx="11" width="96" height="24"/><text x="88" y="44" text-anchor="middle">DEPS</text></g>
+                <g class="hg-pill" style="animation-delay:.3s"><rect x="40" y="116" rx="11" width="96" height="24"/><text x="88" y="132" text-anchor="middle">SECRETS</text></g>
+                <g class="hg-pill" style="animation-delay:.45s"><rect x="584" y="28" rx="11" width="96" height="24"/><text x="632" y="44" text-anchor="middle">CODE</text></g>
+                <g class="hg-pill" style="animation-delay:.6s"><rect x="584" y="116" rx="11" width="96" height="24"/><text x="632" y="132" text-anchor="middle">CONFIG</text></g>
+                <g class="hg-core"><rect x="320" y="44" rx="18" width="80" height="80" fill="#FBFAF6" stroke="#DDD8CD"/>
+                  <image href="/static/COSENTINEL.svg" x="332" y="56" width="56" height="56" preserveAspectRatio="xMidYMid meet"/>
+                </g>
+              </svg>
+            </div>
+            <h1 id="heroTitle"><span class="lcd" style="animation-delay:.1s">Scansiona.</span> <span class="lcd" style="animation-delay:.35s">Correggi.</span> <span class="lcd" style="animation-delay:.6s">Rilascia.</span></h1>
+            <p class="sub" id="heroSub">Punta CoSentinel a un repository GitHub. Trova dipendenze vulnerabili, segreti esposti, codice pericoloso e configurazioni errate, poi spiega come correggerli.</p>
+          </div>
+        </section>
+
+        <section class="toolkit">
+          <div class="toolkit-head">
+            <h2 id="toolkitTitle">Toolkit difensivo autorizzato</h2>
+            <div class="note" id="toolkitNote">Per sistemi e repository che possiedi o sei esplicitamente autorizzato a testare.</div>
+          </div>
+          <div class="tool-grid">
+            <button type="button" class="card tool-card tool-link" data-jump="scanCard" data-tool="deps">
+              <div class="tool-icon"><svg class="ico"><use href="#i-package"/></svg></div>
+              <div class="tool-name">Audit dipendenze</div>
+              <div class="tool-desc">Controlla i manifest dei pacchetti contro vulnerabilità note e segnala dipendenze transitive rischiose.</div>
+              <div class="tool-meta">OSV.dev</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="scanCard" data-tool="secrets">
+              <div class="tool-icon"><svg class="ico"><use href="#i-key"/></svg></div>
+              <div class="tool-name">Scansione segreti</div>
+              <div class="tool-desc">Trova API key, token e materiale privato esposto nel codice e nella cronologia commit.</div>
+              <div class="tool-meta">Output redatto</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="findings" data-tool="code">
+              <div class="tool-icon"><svg class="ico"><use href="#i-code"/></svg></div>
+              <div class="tool-name">Revisione codice</div>
+              <div class="tool-desc">Evidenzia rischi di injection, pattern `eval` insicuri, crittografia debole e altri percorsi pericolosi.</div>
+              <div class="tool-meta">Analisi statica</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="scannerStatus" data-tool="exposure">
+              <div class="tool-icon"><svg class="ico"><use href="#i-shield-check"/></svg></div>
+              <div class="tool-name">Controllo esposizione</div>
+              <div class="tool-desc">Mostra porte, servizi e segnali di hardening dichiarati in Docker, Compose, Kubernetes e config web.</div>
+              <div class="tool-meta">Inventario in sola lettura</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="reportSection" data-tool="config">
+              <div class="tool-icon"><svg class="ico"><use href="#i-settings"/></svg></div>
+              <div class="tool-name">Hardening config</div>
+              <div class="tool-desc">Controlla Docker, CI, Compose e Kubernetes per default insicuri ed esposizioni inutili.</div>
+              <div class="tool-meta">Revisione infra</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="scanCard" data-tool="network">
+              <div class="tool-icon"><svg class="ico"><use href="#i-external"/></svg></div>
+              <div class="tool-name">Validazione entry point</div>
+              <div class="tool-desc">Su target autorizzato: porte aperte, header HTTP, TLS, DNS e path sensibili (nikto/gobuster opzionali).</div>
+              <div class="tool-meta">Live target opzionale</div>
+            </button>
+            <button type="button" class="card tool-card tool-link" data-jump="historySection" data-tool="history">
+              <div class="tool-icon"><svg class="ico"><use href="#i-history"/></svg></div>
+              <div class="tool-name">Scansione cronologia</div>
+              <div class="tool-desc">Rilegge la cronologia del repository per trovare segreti o regressioni sfuggiti all’ultimo commit.</div>
+              <div class="tool-meta">Audit commit</div>
+            </button>
+          </div>
+        </section>
+
+        <!-- SCAN FORM -->
+        <div class="card scan-card" id="scanCard">
+          <div class="form-head"><span class="tag">NUOVA SCANSIONE</span></div>
+          <div class="field">
+            <label class="field-label" for="repoUrl">URL repository GitHub</label>
+            <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
+            <div class="helper" id="urlHelper">Pubblico o privato. Incolla l'URL completo del repository.</div>
+          </div>
+          <div class="row">
+            <div class="grow">
+              <label class="field-label" for="token">Token GitHub</label>
+              <input id="token" type="password" placeholder="ghp_…" autocomplete="off">
+              <div class="helper">Serve solo per repository privati.</div>
+            </div>
+            <div class="model">
+              <label class="field-label" for="model">Modello AI</label>
+              <select id="model"><option>caricamento…</option></select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="liveTarget">Live target (opzionale)</label>
+            <input id="liveTarget" type="text" placeholder="scanme.nmap.org o https://staging.example.com" autocomplete="off" spellcheck="false">
+            <div class="helper" id="liveTargetHelp">Solo sistemi di tua proprietà o con permesso scritto. Valida entry point esterni (nmap, header, TLS, nikto/gobuster).</div>
+            <div class="target-suggest hidden" id="targetSuggest"></div>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="auth">
+            <label for="auth">Confermo che questo repository è autorizzato per test di sicurezza.</label>
+          </div>
+          <div class="check-row hidden" id="liveAuthRow">
+            <input type="checkbox" id="liveAuth">
+            <label for="liveAuth">Confermo di essere autorizzato a validare il live target indicato.</label>
+          </div>
+          <button class="btn btn-red" id="scanBtn" disabled>
+            <svg class="ico ico-sm"><use href="#i-shield"/></svg> Avvia scansione
+          </button>
+        </div>
+
+        <!-- PROGRESS -->
+        <section class="block hidden" id="progress" aria-live="polite" role="status">
+            <div class="card">
+            <div class="progress-head">
+              <h3><svg class="ico ico-sm" style="color:var(--red)"><use href="#i-loader"/></svg> Scansione repository…</h3>
+              <span class="progress-meta"><span id="stepCounter">Passo 1 di 8</span> · <span id="timer">0.0s</span></span>
+            </div>
+            <ul class="steps" id="steps">
+              <li data-step="1"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Recupero repository</span></li>
+              <li data-step="2"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scansione dipendenze (OSV.dev)</span></li>
+              <li data-step="3"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Rilevamento segreti</span></li>
+              <li data-step="4"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Revisione codice e route</span></li>
+              <li data-step="5"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Controllo esposizione autorizzato</span></li>
+              <li data-step="6"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Revisione configurazione</span></li>
+              <li data-step="7"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scansione cronologia Git</span></li>
+              <li data-step="8" id="stepNetwork" class="hidden"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Validazione entry point live</span></li>
+              <li data-step="9" id="stepAI"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Analisi AI (Regolo)</span></li>
+            </ul>
+            <div style="padding:0 22px 18px"><button class="btn btn-sm btn-ghost" id="cancelBtn"></button></div>
+          </div>
+        </section>
+
+        <div id="errBox"></div>
+
+        <!-- RESULTS -->
+        <section class="block hidden" id="results">
+          <div class="result-head">
+            <div class="card risk-card">
+              <div class="risk-score" id="riskScore">—</div>
+              <div class="risk-info">
+                <div class="risk-label" id="riskLabel"></div>
+                <div class="risk-sub" id="meta"></div>
+              </div>
+            </div>
+          </div>
+          <div class="scan-meta" id="scanMeta"></div>
+          <div class="status-grid" id="scannerStatus"></div>
+          <div class="kpis" id="kpis"></div>
+          <section class="block hidden ep-section" id="entryPointsSection">
+            <div class="ep-head" id="entryPointsTitle"></div>
+            <div class="ep-list" id="entryPoints"></div>
+          </section>
+          <div class="card trend-card hidden" id="trendCard">
+            <div class="trend-head">
+              <span class="trend-title" id="trendTitle"></span>
+              <span class="trend-legend"><span><i style="background:var(--red)"></i><span id="trLegRisk"></span></span><span><i style="background:var(--ink)"></i><span id="trLegFind"></span></span></span>
+            </div>
+            <div id="trendBody"></div>
+          </div>
+          <div class="diff-bar hidden" id="diffBar">
+            <span class="trend-title" id="diffTitle"></span>
+            <select id="diffSelect"></select>
+          </div>
+          <div class="diff-panel" id="diffPanel"></div>
+        </section>
+
+        <section class="block hidden" id="findingsTools">
+          <div class="find-toolbar">
+            <div class="find-search"><svg class="ico"><use href="#i-search"/></svg><input id="findSearch" type="text" autocomplete="off"></div>
+            <div id="findCats" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <select class="find-sort" id="findSort"></select>
+            <div class="find-actions"><button class="btn btn-sm btn-ghost" id="csvBtn"></button></div>
+          </div>
+        </section>
+        <section class="block hidden" id="findings"></section>
+
+        <section class="block hidden" id="prSection">
+          <div class="card pad">
+            <div class="card-title"><svg class="ico"><use href="#i-pr"/></svg> Correzione automatica disponibile</div>
+            <div id="prList"></div>
+            <button class="btn btn-sm" id="prBtn"><svg class="ico ico-sm"><use href="#i-pr"/></svg> Crea PR di fix su GitHub</button>
+            <div id="prResult" style="margin-top:12px"></div>
+          </div>
+        </section>
+
+        <section class="block hidden" id="reportSection">
+          <div class="card pad">
+            <div class="card-title"><svg class="ico"><use href="#i-shield"/></svg> Report AI completo</div>
+            <div class="report" id="report"></div>
+            <div class="btn-row">
+              <button class="btn btn-sm btn-red" id="dlPdfBtn"><svg class="ico ico-sm"><use href="#i-download"/></svg> Scarica PDF</button>
+              <button class="btn btn-sm" id="dlBtn"><svg class="ico ico-sm"><use href="#i-download"/></svg> Scarica .md</button>
+              <button class="btn btn-sm btn-ghost" id="copyBtn"><svg class="ico ico-sm"><use href="#i-copy"/></svg> Copia report</button>
+            </div>
+          </div>
+        </section>
+
       </div>
-      <ul class="steps" id="steps">
-        <li data-step="1"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Fetching repository</span></li>
-        <li data-step="2"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scanning dependencies (OSV.dev)</span></li>
-        <li data-step="3"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Detecting secrets</span></li>
-        <li data-step="4"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Auditing source code</span></li>
-        <li data-step="5"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Auditing configuration files</span></li>
-        <li data-step="6"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scanning git history</span></li>
-        <li data-step="7"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">AI Analysis (Regolo)</span></li>
-      </ul>
     </div>
-  </section>
-
-  <div id="errBox"></div>
-
-  <section class="block hidden" id="results">
-    <div class="risk-card">
-      <div class="risk-score" id="riskScore">—</div>
-      <div class="risk-info">
-        <div class="risk-label" id="riskLabel"></div>
-        <div class="risk-sub" id="meta"></div>
-      </div>
-    </div>
-    <div class="scan-meta" id="scanMeta"></div>
-    <div class="status-grid" id="scannerStatus"></div>
-    <div class="kpis" id="kpis"></div>
-  </section>
-
-  <section class="block hidden" id="historySection">
-    <div class="card">
-      <div class="card-title"><svg class="ico"><use href="#i-info"/></svg> Scan History</div>
-      <div class="scan-list" id="scanHistory"></div>
-    </div>
-  </section>
-
-  <section class="block hidden" id="findings"></section>
-
-  <section class="block hidden" id="prSection">
-    <div class="card">
-      <div class="card-title"><svg class="ico"><use href="#i-pr"/></svg> Auto-Fix Available</div>
-      <div id="prList"></div>
-      <button class="btn btn-sm" id="prBtn"><svg class="ico ico-sm"><use href="#i-pr"/></svg> Create Fix PR on GitHub</button>
-      <div id="prResult" style="margin-top:12px"></div>
-    </div>
-  </section>
-
-  <section class="block hidden" id="reportSection">
-    <div class="card">
-      <div class="card-title"><svg class="ico"><use href="#i-shield"/></svg> Full AI Security Report</div>
-      <div class="report" id="report"></div>
-      <div class="btn-row">
-        <button class="btn btn-sm" id="dlBtn"><svg class="ico ico-sm"><use href="#i-download"/></svg> Download .md</button>
-        <button class="btn btn-sm btn-ghost" id="copyBtn"><svg class="ico ico-sm"><use href="#i-copy"/></svg> Copy Report</button>
-      </div>
-    </div>
-  </section>
-
+  </main>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const TOTAL_STEPS = 7;
+let TOTAL_STEPS = 8;
 const SEV_CLASS = { CRITICAL: 'crit', HIGH: 'high', MEDIUM: 'med', LOW: 'low', INFO: 'info' };
 const SEV_ICON  = { CRITICAL: 'i-alert', HIGH: 'i-alert', MEDIUM: 'i-alert', LOW: 'i-info', INFO: 'i-info' };
-const CAT_ICON  = { dependency: 'i-package', secret: 'i-key', code: 'i-code', config: 'i-settings' };
+const CAT_ICON  = { dependency: 'i-package', secret: 'i-key', code: 'i-code', config: 'i-settings', exposure: 'i-shield-check', network: 'i-external', route: 'i-external', target: 'i-external', auth: 'i-shield-check' };
+const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-let lastReport = '', lastFindings = [], activeFilter = null, timerId = null, lastScanId = '', lastRepoUrl = '';
+const I18N = {
+  it: {
+    title: 'CoSentinel - Scanner di sicurezza AI',
+    new_scan: 'Nuova scansione',
+    history_search: 'Cerca nella cronologia...',
+    history_label: 'Cronologia scansioni',
+    history_empty: 'Nessuna scansione ancora. Avvia la prima per creare la cronologia.',
+    connecting: 'Connessione in corso...',
+    scanning: 'Scansione repository...',
+    homepage_h1: ['Scansiona.', 'Correggi.', 'Rilascia.'],
+    homepage_sub: "Punta CoSentinel a un repository GitHub. Trova dipendenze vulnerabili, segreti esposti, codice pericoloso e configurazioni errate, poi spiega come correggerli.",
+    toolkit_title: 'Toolkit difensivo autorizzato',
+    toolkit_note: 'Per sistemi e repository che possiedi o sei esplicitamente autorizzato a testare.',
+    tool_deps: ['Audit dipendenze', 'Controlla i manifest dei pacchetti contro vulnerabilità note e segnala dipendenze transitive rischiose.', 'OSV.dev'],
+    tool_secrets: ['Scansione segreti', "Trova API key, token e materiale privato esposto nel codice e nella cronologia commit.", 'Output redatto'],
+    tool_code: ['Revisione codice', 'Evidenzia rischi di injection, pattern `eval` insicuri, crittografia debole e altri percorsi pericolosi.', 'Analisi statica'],
+    tool_exposure: ['Controllo esposizione', 'Mostra porte, servizi e segnali di hardening dichiarati in Docker, Compose, Kubernetes e config web.', 'Inventario in sola lettura'],
+    tool_config: ['Hardening config', 'Controlla Docker, CI, Compose e Kubernetes per default insicuri ed esposizioni inutili.', 'Revisione infra'],
+    tool_network: ['Validazione entry point', 'Su target autorizzato: porte aperte, header HTTP, TLS, DNS e path sensibili.', 'Live target opzionale'],
+    tool_history: ['Scansione cronologia', "Rilegge la cronologia del repository per trovare segreti o regressioni sfuggiti all’ultimo commit.", 'Audit commit'],
+    form_tag: 'NUOVA SCANSIONE',
+    repo_label: 'URL repository GitHub',
+    repo_help: "Pubblico o privato. Incolla l'URL completo del repository.",
+    token_label: 'Token GitHub',
+    token_help: 'Serve solo per repository privati.',
+    model_label: 'Modello AI',
+    live_target_label: 'Live target (opzionale)',
+    live_target_help: 'Solo sistemi di tua proprietà o con permesso scritto. Valida entry point esterni (nmap, header, TLS, nikto/gobuster).',
+    auth_label: 'Confermo che questo repository è autorizzato per test di sicurezza.',
+    live_auth_label: 'Confermo di essere autorizzato a validare il live target indicato.',
+    scan_btn: 'Avvia scansione',
+    progress_title: 'Scansione repository...',
+    step1: 'Recupero repository',
+    step2: 'Scansione dipendenze (OSV.dev)',
+    step3: 'Rilevamento segreti',
+    step4: 'Revisione codice e route',
+    step5: 'Controllo esposizione autorizzato',
+    step6: 'Revisione configurazione',
+    step7: 'Scansione cronologia Git',
+    step8_network: 'Validazione entry point live',
+    step8: 'Analisi AI (Regolo)',
+    step9: 'Analisi AI (Regolo)',
+    pr_title: 'Correzione automatica disponibile',
+    pr_btn: 'Crea PR di fix su GitHub',
+    report_title: 'Report AI completo',
+    pdf_btn: 'Scarica PDF',
+    md_btn: 'Scarica .md',
+    copy_btn: 'Copia report',
+    start_scan: 'Nuova scansione',
+    scanning_crumb: 'Scansione',
+    history_empty_match: 'Nessuna scansione corrisponde alla ricerca.',
+    history_empty_default: 'Nessuna scansione ancora. Avvia la prima per creare la cronologia.',
+    no_findings: 'Repository pulito',
+    no_filtered: sev => `Nessuna finding ${sev}`,
+    error_title: 'Scansione fallita.',
+    connection_lost: 'Connessione persa. Riprova.',
+    online_prefix: 'Online',
+    offline: 'Offline',
+    step_counter: n => `Passo ${n} di ${TOTAL_STEPS}`,
+    scan_failed: 'Scansione fallita.',
+    show_report: 'Mostra report',
+    scanner_names: { deps: 'dipendenze', secrets: 'segreti', code: 'codice', routes: 'route API', targets: 'target deploy', auth: 'auth debole', exposure: 'esposizione', config: 'config', git_history: 'cronologia git', network: 'entry point live' },
+    target_suggest_label: 'Target suggeriti dal repo:',
+    target_use: 'Usa per validazione live',
+    entry_points_title: 'Percorsi di ingresso',
+    entry_points_empty: 'Nessun percorso di ingresso correlato.',
+    ep_confirmed: 'CONFERMATO',
+    ep_inferred: 'INFERITO',
+    findings_title: 'Rilevamenti',
+    auto_fixable: 'Correggibile automaticamente',
+    fix_label: 'Correzione',
+    cves_label: 'CVE',
+    findings_count: n => `${n} rilevamenti`,
+    risk: {
+      critical: 'Rischio critico',
+      high: 'Rischio alto',
+      moderate: 'Rischio moderato',
+      low: 'Rischio basso',
+      clean: 'Nessun problema trovato',
+    },
+    live_connecting: 'Connessione in corso...',
+    cancel: 'Annulla', retry: 'Riprova', deleted: 'Scansione eliminata',
+    copied_report: 'Report copiato', pdf_failed: 'Esportazione PDF fallita',
+    find_search_ph: 'Filtra rilevamenti...', cat_all: 'Tutte',
+    sort_sev: 'Severità', sort_file: 'File', sort_cat: 'Categoria',
+    export_csv: 'Esporta CSV', no_match: 'Nessun rilevamento corrisponde',
+    trend_title: 'Andamento sicurezza', trend_risk: 'Rischio', trend_findings: 'Rilevamenti',
+    trend_empty: 'Servono almeno 2 scansioni dello stesso repo per il grafico.',
+    diff_title: 'Confronta con', diff_new: 'Nuovi', diff_resolved: 'Risolti', diff_none: 'Nessuno',
+  },
+  en: {
+    title: 'CoSentinel - AI Security Scanner',
+    new_scan: 'New scan',
+    history_search: 'Search history...',
+    history_label: 'Scan history',
+    history_empty: 'No scans yet. Run your first scan to build a history.',
+    connecting: 'Connecting...',
+    scanning: 'Scanning repository...',
+    homepage_h1: ['Scan.', 'Fix.', 'Ship.'],
+    homepage_sub: 'Point CoSentinel at a GitHub repo. It finds vulnerable dependencies, leaked secrets, dangerous code, and misconfigurations, then explains exactly how to fix them.',
+    toolkit_title: 'Authorized defensive toolkit',
+    toolkit_note: 'For systems and repositories you own or are explicitly allowed to test.',
+    tool_deps: ['Dependency audit', 'Checks package manifests against known vulnerabilities and flags risky transitive dependencies.', 'OSV.dev'],
+    tool_secrets: ['Secret exposure scan', 'Finds leaked API keys, tokens, and private material in source and commit history.', 'Redacted output'],
+    tool_code: ['Code misuse review', 'Highlights injection risks, unsafe eval patterns, weak crypto, and other dangerous code paths.', 'Static analysis'],
+    tool_exposure: ['Authorized exposure check', 'Shows repo-declared ports, services, and hardening signals from Docker, Compose, Kubernetes, and web configs.', 'Read-only inventory'],
+    tool_config: ['Config hardening', 'Audits Docker, CI, Compose, and Kubernetes configs for insecure defaults and exposure.', 'Infra review'],
+    tool_network: ['Entry point validation', 'On authorized targets: open ports, HTTP headers, TLS, DNS, and sensitive paths.', 'Optional live target'],
+    tool_history: ['Git history sweep', 'Replays repository history to catch secrets or regressions that survived the latest commit.', 'Commit audit'],
+    form_tag: 'NEW SCAN',
+    repo_label: 'GitHub Repository URL',
+    repo_help: 'Public or private. Paste the full repository URL.',
+    token_label: 'GitHub Token',
+    token_help: 'Only needed for private repositories.',
+    model_label: 'AI Model',
+    live_target_label: 'Live target (optional)',
+    live_target_help: 'Only systems you own or have written permission to test. Validates external entry points (nmap, headers, TLS, nikto/gobuster).',
+    auth_label: 'I confirm this repository is authorized for security testing.',
+    live_auth_label: 'I confirm I am authorized to validate the live target above.',
+    scan_btn: 'Start Security Scan',
+    progress_title: 'Scanning repository...',
+    step1: 'Fetching repository',
+    step2: 'Scanning dependencies (OSV.dev)',
+    step3: 'Detecting secrets',
+    step4: 'Auditing source code and routes',
+    step5: 'Checking authorized exposure',
+    step6: 'Auditing configuration files',
+    step7: 'Scanning git history',
+    step8_network: 'Live entry point validation',
+    step8: 'AI Analysis (Regolo)',
+    step9: 'AI Analysis (Regolo)',
+    pr_title: 'Auto-Fix Available',
+    pr_btn: 'Create Fix PR on GitHub',
+    report_title: 'Full AI Security Report',
+    pdf_btn: 'Download PDF',
+    md_btn: 'Download .md',
+    copy_btn: 'Copy Report',
+    start_scan: 'New scan',
+    scanning_crumb: 'Scanning',
+    history_empty_match: 'No scans match your search.',
+    history_empty_default: 'No scans yet. Run your first scan to build a history.',
+    no_findings: 'Repository clean',
+    no_filtered: sev => `No ${sev} findings`,
+    error_title: 'Scan failed.',
+    connection_lost: 'Connection lost. Please try again.',
+    online_prefix: 'Online',
+    offline: 'Offline',
+    step_counter: n => `Step ${n} of ${TOTAL_STEPS}`,
+    scan_failed: 'Scan failed.',
+    show_report: 'Show report',
+    scanner_names: { deps: 'deps', secrets: 'secrets', code: 'code', routes: 'routes', targets: 'deploy targets', auth: 'weak auth', exposure: 'exposure', config: 'config', git_history: 'git_history', network: 'live entry points' },
+    target_suggest_label: 'Suggested targets from repo:',
+    target_use: 'Use for live validation',
+    entry_points_title: 'Entry paths',
+    entry_points_empty: 'No correlated entry paths identified.',
+    ep_confirmed: 'CONFIRMED',
+    ep_inferred: 'INFERRED',
+    findings_title: 'Findings',
+    auto_fixable: 'Auto-fixable',
+    fix_label: 'Fix',
+    cves_label: 'CVEs',
+    findings_count: n => `${n} findings`,
+    risk: {
+      critical: 'Critical risk',
+      high: 'High risk',
+      moderate: 'Moderate risk',
+      low: 'Low risk',
+      clean: 'No issues found',
+    },
+    live_connecting: 'Connecting...',
+    cancel: 'Cancel', retry: 'Retry', deleted: 'Scan deleted',
+    copied_report: 'Report copied', pdf_failed: 'PDF export failed',
+    find_search_ph: 'Filter findings...', cat_all: 'All',
+    sort_sev: 'Severity', sort_file: 'File', sort_cat: 'Category',
+    export_csv: 'Export CSV', no_match: 'No findings match',
+    trend_title: 'Security trend', trend_risk: 'Risk', trend_findings: 'Findings',
+    trend_empty: 'Need at least 2 scans of the same repo to chart a trend.',
+    diff_title: 'Compare with', diff_new: 'New', diff_resolved: 'Resolved', diff_none: 'None',
+  },
+};
+let LANG = localStorage.getItem('cosentinel_lang') || 'it';
+function t(key, ...args) {
+  const val = I18N[LANG][key] ?? I18N.it[key];
+  return typeof val === 'function' ? val(...args) : val;
+}
+function setText(sel, value) {
+  const el = typeof sel === 'string' ? $(sel) : sel;
+  if (el) el.textContent = value;
+}
+function setHTML(sel, value) {
+  const el = typeof sel === 'string' ? $(sel) : sel;
+  if (el) el.innerHTML = value;
+}
+function applyLocale(lang = LANG) {
+  LANG = lang;
+  localStorage.setItem('cosentinel_lang', lang);
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  setText('langToggle', lang === 'it' ? 'EN' : 'IT');
+  $('langToggle').setAttribute('aria-label', lang === 'it' ? 'Select language' : 'Seleziona lingua');
+  setHTML('newScanBtn', `${icon('i-plus','ico-sm')} ${t('new_scan')}`);
+  $('historySearch').placeholder = t('history_search');
+  setText('histLabelText', t('history_label'));
+  if (liveState.status === 'online') setText('liveText', `${t('online_prefix')} · ${liveState.model}`);
+  else if (liveState.status === 'offline') setText('liveText', t('offline'));
+  else setText('liveText', t('connecting'));
+  setHTML('crumb', `<b>${t('new_scan')}</b>`);
+  setHTML('heroTitle', `<span class="lcd" style="animation-delay:.1s">${t('homepage_h1')[0]}</span> <span class="lcd" style="animation-delay:.35s">${t('homepage_h1')[1]}</span> <span class="lcd" style="animation-delay:.6s">${t('homepage_h1')[2]}</span>`);
+  setText('heroSub', t('homepage_sub'));
+  setText('toolkitTitle', t('toolkit_title'));
+  setText('toolkitNote', t('toolkit_note'));
+  document.querySelectorAll('[data-tool]').forEach(btn => {
+    const key = btn.dataset.tool;
+    const [name, desc, meta] = t(`tool_${key}`);
+    const nameEl = btn.querySelector('.tool-name');
+    const descEl = btn.querySelector('.tool-desc');
+    const metaEl = btn.querySelector('.tool-meta');
+    if (nameEl) nameEl.textContent = name;
+    if (descEl) descEl.textContent = desc;
+    if (metaEl) metaEl.textContent = meta;
+  });
+  document.querySelector('#scanCard .tag').textContent = t('form_tag');
+  document.querySelector('label[for="repoUrl"]').textContent = t('repo_label');
+  document.querySelector('#urlHelper').textContent = t('repo_help');
+  document.querySelector('label[for="token"]').textContent = t('token_label');
+  document.querySelector('#token').nextElementSibling.textContent = t('token_help');
+  document.querySelector('label[for="model"]').textContent = t('model_label');
+  const liveLabel = document.querySelector('label[for="liveTarget"]');
+  if (liveLabel) liveLabel.textContent = t('live_target_label');
+  const liveHelp = $('liveTargetHelp');
+  if (liveHelp) liveHelp.textContent = t('live_target_help');
+  document.querySelector('label[for="auth"]').textContent = t('auth_label');
+  const liveAuthLabel = document.querySelector('label[for="liveAuth"]');
+  if (liveAuthLabel) liveAuthLabel.textContent = t('live_auth_label');
+  document.querySelector('#scanBtn').innerHTML = `${icon('i-shield','ico-sm')} ${t('scan_btn')}`;
+  document.querySelector('#progress .progress-head h3').innerHTML = `${icon('i-loader','ico-sm')} ${t('progress_title')}`;
+  configureStepLabels(hasLiveTarget());
+  const prTitle = document.querySelector('#prSection .card-title');
+  if (prTitle) prTitle.innerHTML = `${icon('i-pr')} ${t('pr_title')}`;
+  document.querySelector('#prBtn').innerHTML = `${icon('i-pr','ico-sm')} ${t('pr_btn')}`;
+  const reportTitle = document.querySelector('#reportSection .card-title');
+  if (reportTitle) reportTitle.innerHTML = `${icon('i-shield')} ${t('report_title')}`;
+  document.querySelector('#dlPdfBtn').innerHTML = `${icon('i-download','ico-sm')} ${t('pdf_btn')}`;
+  document.querySelector('#dlBtn').innerHTML = `${icon('i-download','ico-sm')} ${t('md_btn')}`;
+  document.querySelector('#copyBtn').innerHTML = `${icon('i-copy','ico-sm')} ${t('copy_btn')}`;
+  if (lastData) render(lastData); else renderHistory();
+}
+
+let lastData = null, lastReport = '', lastFindings = [], activeFilter = null, timerId = null,
+    lastScanId = '', lastRepoUrl = '', allScans = [];
+let findQuery = '', findCat = '', findSort = 'sev', currentES = null, lastScanParams = null, suppressHash = false;
+let liveState = { status: 'connecting', model: '' };
+
+$('langToggle').addEventListener('click', () => applyLocale(LANG === 'it' ? 'en' : 'it'));
+applyLocale(LANG);
 
 function esc(s) { return (s||'').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 function icon(id, cls) { return `<svg class="ico ${cls||''}"><use href="#${id}"/></svg>`; }
 
-// --- live status (health + models) ---
+/* count-up animation for numbers (respects reduced-motion) */
+function countUp(el, to, dur = 700, fmt = v => Math.round(v)) {
+  if (REDUCE || to === 0) { el.textContent = fmt(to); return; }
+  const t0 = performance.now();
+  (function tick(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(to * e);
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ---- mobile drawer ---- */
+function toggleNav(open) { $('app').classList.toggle('nav-open', open ?? !$('app').classList.contains('nav-open')); }
+$('menuBtn').addEventListener('click', () => toggleNav());
+$('scrim').addEventListener('click', () => toggleNav(false));
+
+function jumpToSection(id) {
+  const el = $(id);
+  if (!el) return;
+  $('canvas').scrollTo({ top: Math.max(0, el.offsetTop - 16), behavior: REDUCE ? 'auto' : 'smooth' });
+}
+$('canvas').addEventListener('click', e => {
+  const btn = e.target.closest('[data-jump]');
+  if (!btn) return;
+  jumpToSection(btn.dataset.jump);
+});
+
+/* ---- new scan ---- */
+function showNewScan() {
+  ['progress','results','findingsTools','findings','prSection','reportSection'].forEach(s => $(s).classList.add('hidden'));
+  $('errBox').innerHTML = '';
+  findQuery = ''; findCat = ''; clearHash();
+  $('heroEmpty').classList.remove('hidden');
+  $('scanCard').classList.remove('hidden');
+  $('navBadge').classList.add('hidden');
+  $('crumb').innerHTML = `<b>${t('start_scan')}</b>`;
+  [...$('scanHistory').querySelectorAll('.scan-item')].forEach(c => c.classList.remove('active'));
+  $('canvas').scrollTop = 0;
+  toggleNav(false);
+  $('repoUrl').focus();
+}
+$('newScanBtn').addEventListener('click', showNewScan);
+
+/* ---- live status (health + models) ---- */
 fetch('/api/health').then(r => r.json()).then(d => {
-  if (d.status === 'ok') $('liveText').textContent = `Scanner online · ${d.model}`;
-}).catch(() => { $('liveDot').style.background = 'var(--sev-med)'; $('liveText').textContent = 'Scanner offline'; });
+  if (d.status === 'ok') {
+    liveState = { status: 'online', model: d.model };
+    $('liveText').textContent = `${t('online_prefix')} · ${d.model}`;
+    $('liveDot').classList.remove('pulse');
+  }
+}).catch(() => {
+  liveState = { status: 'offline', model: '' };
+  $('liveDot').style.background = 'var(--sev-med)';
+  $('liveDot').classList.remove('pulse');
+  $('liveText').textContent = t('offline');
+});
 
 fetch('/api/models').then(r => r.json()).then(d => {
   if (d.models && d.models.length) $('model').innerHTML = d.models.map(m => `<option>${esc(m)}</option>`).join('');
 }).catch(() => { $('model').innerHTML = '<option>default</option>'; });
 
-// --- form ---
-$('auth').addEventListener('change', e => { $('scanBtn').disabled = !e.target.checked; });
-
+/* ---- form ---- */
+function hasLiveTarget() { return !!$('liveTarget').value.trim(); }
+function aiStepNumber() { return hasLiveTarget() ? 9 : 8; }
+function configureStepLabels(hasLive = hasLiveTarget()) {
+  TOTAL_STEPS = hasLive ? 9 : 8;
+  for (let i = 1; i <= 7; i++) {
+    const li = document.querySelector(`#steps li[data-step="${i}"]`);
+    if (li) li.querySelector('.lbl').textContent = t(`step${i}`);
+  }
+  $('stepNetwork').classList.toggle('hidden', !hasLive);
+  $('stepNetwork').querySelector('.lbl').textContent = t('step8_network');
+  $('stepAI').querySelector('.lbl').textContent = t('step9');
+  $('stepAI').setAttribute('data-step', hasLive ? '9' : '8');
+}
+function updateScanBtnState() {
+  const live = hasLiveTarget();
+  $('liveAuthRow').classList.toggle('hidden', !live);
+  if (!live) $('liveAuth').checked = false;
+  const ok = $('auth').checked && (!live || $('liveAuth').checked);
+  $('scanBtn').disabled = !ok;
+  configureStepLabels(live);
+}
+$('auth').addEventListener('change', updateScanBtnState);
+$('liveAuth').addEventListener('change', updateScanBtnState);
+$('liveTarget').addEventListener('input', updateScanBtnState);
+updateScanBtnState();
+$('repoUrl').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('scanBtn').disabled) startScan(); });
 $('repoUrl').addEventListener('blur', () => {
   const v = $('repoUrl').value.trim();
   const ok = !v || /github\.com\//.test(v);
   $('repoUrl').classList.toggle('invalid', !ok);
   $('urlHelper').textContent = ok ? 'Public or private. Paste the full repository URL.' : 'Enter a valid github.com repository URL.';
-  $('urlHelper').style.color = ok ? '' : 'var(--color-destructive)';
+  $('urlHelper').style.color = ok ? '' : 'var(--red)';
 });
 
-// --- progress ---
+/* ---- progress ---- */
 function setStep(i, state) { const li = document.querySelector(`.steps li[data-step="${i}"]`); if (li) li.className = state; }
 function updateProgressStep(step, label) {
   for (let i = 1; i < step; i++) setStep(i, 'done');
   setStep(step, 'active');
   const lbl = document.querySelector(`.steps li[data-step="${step}"] .lbl`);
   if (lbl && label) lbl.textContent = label;
-  $('stepCounter').textContent = `Step ${step} of ${TOTAL_STEPS}`;
+  $('stepCounter').textContent = t('step_counter', step);
 }
 function startTimer() {
   const t0 = performance.now();
@@ -426,59 +1137,72 @@ function startTimer() {
 }
 function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
 
-// AI report takes the longest — show a shimmer placeholder while step 7 runs.
 function showReportSkeleton() {
   $('report').innerHTML = '<div class="skeleton w50"></div><div class="skeleton w90"></div><div class="skeleton"></div><div class="skeleton w70"></div><div class="skeleton w90"></div>';
   $('reportSection').classList.remove('hidden');
 }
-
 function showError(msg) {
   stopTimer();
   $('progress').classList.add('hidden');
   $('scanCard').classList.remove('hidden');
-  $('errBox').innerHTML = `<div class="err">${icon('i-alert')}<div><strong>Scan failed.</strong><br>${esc(msg)}</div></div>`;
+  $('heroEmpty').classList.remove('hidden');
+  $('errBox').innerHTML = `<div class="err">${icon('i-alert')}<div><strong>${t('error_title')}</strong><br>${esc(msg)}<div style="margin-top:10px"><button class="btn btn-sm" id="retryBtn">${icon('i-loader','ico-sm')} ${t('retry')}</button></div></div></div>`;
+  const rb = $('retryBtn'); if (rb) rb.onclick = () => { $('errBox').innerHTML = ''; startScan(); };
+  toast(t('error_title'), 'err');
 }
 
-$('scanBtn').addEventListener('click', () => {
+$('scanBtn').addEventListener('click', startScan);
+function startScan() {
   const repoUrl = $('repoUrl').value.trim();
   if (!repoUrl) { $('repoUrl').focus(); return; }
+  if ($('scanBtn').disabled) return;
   lastRepoUrl = repoUrl;
   const token = $('token').value.trim();
   const model = $('model').value;
+  const liveTarget = $('liveTarget').value.trim();
+  lastScanParams = { repoUrl, token, model, liveTarget };
+  configureStepLabels(!!liveTarget);
 
+  $('heroEmpty').classList.add('hidden');
   $('scanCard').classList.add('hidden');
   $('errBox').innerHTML = '';
-  $('results').classList.add('hidden');
-  $('findings').classList.add('hidden');
-  $('prSection').classList.add('hidden');
-  $('reportSection').classList.add('hidden');
+  ['results','findingsTools','findings','prSection','reportSection'].forEach(s => $(s).classList.add('hidden'));
   $('progress').classList.remove('hidden');
+  $('crumb').innerHTML = `<svg class="ico" style="width:14px;height:14px"><use href="#i-loader"/></svg> <b>${t('scanning_crumb')}</b> <span class="slash">/</span> ${esc(repoUrl.replace('https://github.com/',''))}`;
   for (let i = 1; i <= TOTAL_STEPS; i++) setStep(i, '');
+  $('canvas').scrollTop = 0;
   startTimer();
 
   const params = new URLSearchParams({ repo_url: repoUrl });
   if (token) params.set('github_token', token);
   if (model) params.set('model', model);
+  if (liveTarget) params.set('live_target', liveTarget);
 
-  const es = new EventSource(`/api/scan/stream?${params}`);
+  const es = currentES = new EventSource(`/api/scan/stream?${params}`);
   es.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (data.type === 'progress') {
       updateProgressStep(data.step, data.label);
-      if (data.step === 7) showReportSkeleton();
+      if (data.step === aiStepNumber()) showReportSkeleton();
     } else if (data.type === 'result') {
-      es.close(); stopTimer();
+      es.close(); currentES = null; stopTimer();
       for (let i = 1; i <= TOTAL_STEPS; i++) setStep(i, 'done');
       $('progress').classList.add('hidden');
       render(data);
     } else if (data.type === 'error') {
-      es.close(); showError(data.message);
+      es.close(); currentES = null; showError(data.message);
     }
   };
-  es.onerror = () => { es.close(); showError('Connection lost. Please try again.'); };
-});
+  es.onerror = () => { es.close(); currentES = null; showError(t('connection_lost')); };
+}
+function cancelScan() {
+  if (currentES) { currentES.close(); currentES = null; }
+  stopTimer();
+  showNewScan();
+  toast(t('cancel'), 'info');
+}
 
-// stats keys differ: POST lowercase, SSE uppercase
+/* stats keys differ: POST lowercase, SSE uppercase */
 function norm(s) {
   return {
     critical: s.critical ?? s.CRITICAL ?? 0, high: s.high ?? s.HIGH ?? 0,
@@ -488,75 +1212,107 @@ function norm(s) {
 }
 function riskScore(s) { return Math.min(10, s.critical*4 + s.high*2 + s.medium*0.5 + s.low*0.1); }
 function riskMeta(score) {
-  if (score >= 8) return { label: 'Critical risk', color: 'var(--sev-crit)' };
-  if (score >= 6) return { label: 'High risk', color: 'var(--sev-high)' };
-  if (score >= 4) return { label: 'Moderate risk', color: 'var(--sev-med)' };
-  if (score > 0)  return { label: 'Low risk', color: 'var(--sev-low)' };
-  return { label: 'No issues found', color: 'var(--ok)' };
+  if (score >= 8) return { label: t('risk').critical, color: 'var(--sev-crit)' };
+  if (score >= 6) return { label: t('risk').high, color: 'var(--sev-high)' };
+  if (score >= 4) return { label: t('risk').moderate, color: 'var(--sev-med)' };
+  if (score > 0)  return { label: t('risk').low, color: 'var(--sev-low)' };
+  return { label: t('risk').clean, color: 'var(--ok)' };
 }
 
-async function loadHistory(repoUrl, activeScanId = '') {
-  if (!repoUrl) return;
+/* ---- history (sidebar, chat-like) ---- */
+async function loadHistory(_repo, activeScanId = '') {
+  if (!allScans.length) $('scanHistory').innerHTML = '<div class="hist-skel"></div><div class="hist-skel"></div><div class="hist-skel"></div>';
   try {
-    const res = await fetch(`/api/scans?repo_url=${encodeURIComponent(repoUrl)}`);
+    const res = await fetch('/api/scans');
     if (!res.ok) return;
     const data = await res.json();
-    const scans = data.scans || [];
-    $('historySection').classList.remove('hidden');
-    if (!scans.length) {
-      $('scanHistory').innerHTML = '<div class="meta">No previous scans for this repository.</div>';
-      return;
-    }
-    $('scanHistory').innerHTML = scans.map(s => `
-      <div class="scan-item ${s.scan_id === activeScanId ? 'active' : ''}">
-        <div>
-          <div class="scan-title">${esc(s.commit_sha || s.scan_id)}</div>
-          <div class="scan-sub">${s.repo_name || ''} · ${s.findings_count || 0} findings · ${Number(s.duration_sec || 0).toFixed(2)}s</div>
-        </div>
-        <div class="scan-actions">
-          <button class="btn btn-sm btn-ghost" data-scan-open="${esc(s.scan_id)}">Open</button>
-          <button class="btn btn-sm btn-ghost" data-scan-delete="${esc(s.scan_id)}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  } catch (_) {}
+    allScans = data.scans || [];
+    if (activeScanId) lastScanId = activeScanId;
+    renderHistory();
+  } catch (_) { renderHistory(); }
 }
+function renderHistory() {
+  const q = $('historySearch').value.trim().toLowerCase();
+  const scans = q ? allScans.filter(s =>
+    `${s.commit_sha||''} ${s.scan_id||''} ${s.repo_name||''} ${s.repo_url||''}`.toLowerCase().includes(q)) : allScans;
+  if (!scans.length) {
+    $('scanHistory').innerHTML = `<div class="hist-empty">${q ? t('history_empty_match') : t('history_empty_default')}</div>`;
+    return;
+  }
+  const groups = [], gi = {};
+  for (const s of scans) {
+    const key = s.repo_name || s.repo_url || '—';
+    if (!(key in gi)) { gi[key] = groups.length; groups.push({ key, items: [] }); }
+    groups[gi[key]].items.push(s);
+  }
+  let html = '', i = 0;
+  for (const g of groups) {
+    html += `<div class="hist-group" title="${esc(g.key)}">${esc(g.key)}</div>`;
+    for (const s of g.items) {
+      const active = s.scan_id === lastScanId;
+      const sev = (s.critical || s.high) ? 'var(--sev-crit)' : s.medium ? 'var(--sev-med)' : 'var(--ok)';
+      html += `<div class="scan-item ${active ? 'active' : ''}" data-scan-open="${esc(s.scan_id)}" style="animation-delay:${Math.min(i,12)*30}ms" tabindex="0" role="button">
+        <div class="si-top">
+          <span class="si-dot" style="background:${sev}"></span>
+          <span class="si-title">${esc(s.commit_sha || s.scan_id)}</span>
+          <button class="si-del" data-scan-delete="${esc(s.scan_id)}" title="Delete scan" aria-label="Delete scan">${icon('i-trash')}</button>
+        </div>
+        <div class="si-sub">${t('findings_count', s.findings_count || 0)} · ${Number(s.duration_sec || 0).toFixed(2)}s</div>
+      </div>`;
+      i++;
+    }
+  }
+  $('scanHistory').innerHTML = html;
+}
+$('historySearch').addEventListener('input', renderHistory);
 
 async function openHistoryScan(scanId) {
   const res = await fetch(`/api/scans/${encodeURIComponent(scanId)}`);
-  if (!res.ok) return;
+  if (!res.ok) { toast(t('error_title'), 'err'); return; }
   const data = await res.json();
   render(data);
   lastScanId = data.scan_id || scanId;
   lastRepoUrl = data.repo_url || lastRepoUrl;
+  setHash(lastScanId);
   loadHistory(lastRepoUrl, lastScanId);
+  toggleNav(false);
 }
 
 function render(data) {
+  lastData = data;
   lastReport = data.report || '';
   lastFindings = data.findings || [];
-  activeFilter = null;
+  activeFilter = null; findQuery = ''; findCat = '';
   lastScanId = data.scan_id || lastScanId;
   lastRepoUrl = data.repo_url || $('repoUrl').value.trim() || lastRepoUrl;
   const s = norm(data.stats || {});
 
+  $('heroEmpty').classList.add('hidden');
+  $('scanCard').classList.add('hidden');
+  $('progress').classList.add('hidden');
+  $('errBox').innerHTML = '';
+
   const score = riskScore(s), rm = riskMeta(score);
-  $('riskScore').textContent = score.toFixed(1) + ' / 10';
   $('riskScore').style.color = rm.color;
+  countUp($('riskScore'), score, 800, v => v.toFixed(1) + ' / 10');
   $('riskLabel').textContent = rm.label;
   $('riskLabel').style.color = rm.color;
   $('meta').textContent = `${data.repo_name||''} · ${new Date().toLocaleString()} · ${s.total_files} files`;
+  $('crumb').innerHTML = `<svg class="ico" style="width:14px;height:14px;color:${rm.color}"><use href="#i-shield"/></svg> <b>${esc(data.repo_name||'Scan')}</b> <span class="slash">/</span> ${rm.label.toLowerCase()}`;
   $('scanMeta').innerHTML = [
     data.scan_id ? `<span class="scan-chip">scan_id: ${esc(data.scan_id)}</span>` : '',
     data.commit_sha ? `<span class="scan-chip">commit: ${esc(data.commit_sha)}</span>` : '',
+    data.live_target ? `<span class="scan-chip">live: ${esc(data.live_target)}</span>` : '',
     data.duration_sec != null ? `<span class="scan-chip">duration: ${Number(data.duration_sec).toFixed(2)}s</span>` : '',
     `<span class="scan-chip">errors: ${esc(String((data.scan_errors || []).length))}</span>`,
   ].filter(Boolean).join('');
   renderScannerStatus(data.scanner_status || {});
-  $('historySection').classList.remove('hidden');
+  renderEntryPoints(data.entry_points || []);
+  renderSuggestedTargets(data.suggested_targets || []);
 
-  const kpi = (cls, sev, n) => `<button class="kpi ${cls}" data-sev="${sev}"><div class="kpi-count">${n}</div><div class="kpi-label">${sev}</div></button>`;
+  const kpi = (cls, sev, n) => `<button class="kpi ${cls}" data-sev="${sev}"><div class="kpi-count" data-n="${n}">0</div><div class="kpi-label">${sev}</div></button>`;
   $('kpis').innerHTML = kpi('crit','CRITICAL',s.critical) + kpi('high','HIGH',s.high) + kpi('med','MEDIUM',s.medium) + kpi('low','LOW',s.low);
+  [...$('kpis').querySelectorAll('.kpi-count')].forEach(el => countUp(el, +el.dataset.n, 700));
   $('results').classList.remove('hidden');
 
   setNavBadge(s);
@@ -564,6 +1320,11 @@ function render(data) {
   renderPR(lastFindings);
   $('report').innerHTML = marked.parse(lastReport);
   $('reportSection').classList.remove('hidden');
+  if ($('findSearch')) $('findSearch').value = '';
+  if ($('findSort')) $('findSort').value = findSort = 'sev';
+  $('canvas').scrollTop = 0;
+  setHash(lastScanId);
+  drawTrend(); populateDiff();
   loadHistory(lastRepoUrl, lastScanId);
 }
 
@@ -574,7 +1335,7 @@ function setNavBadge(s) {
   $('navBadge').classList.remove('hidden');
 }
 
-// KPI click → filter by severity (toggle)
+/* KPI click → filter by severity (toggle) */
 $('kpis').addEventListener('click', e => {
   const card = e.target.closest('.kpi'); if (!card) return;
   const sev = card.dataset.sev;
@@ -583,69 +1344,134 @@ $('kpis').addEventListener('click', e => {
   renderFindings();
 });
 
+function getFilteredFindings() {
+  let list = lastFindings.slice();
+  if (activeFilter) list = list.filter(f => f.severity === activeFilter);
+  if (findCat) list = list.filter(f => f.category === findCat);
+  if (findQuery) {
+    const q = findQuery.toLowerCase();
+    list = list.filter(f => `${f.title||''} ${f.description||''} ${f.file_path||''} ${(f.cve_ids||[]).join(' ')}`.toLowerCase().includes(q));
+  }
+  return list;
+}
+function buildCatChips() {
+  const cc = $('findCats'); if (!cc) return;
+  const cats = [...new Set(lastFindings.map(f => f.category).filter(Boolean))];
+  cc.innerHTML = `<button class="cat-chip ${findCat===''?'active':''}" data-cat="">${t('cat_all')}</button>` +
+    cats.map(c => `<button class="cat-chip ${findCat===c?'active':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+}
 function renderFindings() {
   const order = ['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
-  const list = activeFilter ? lastFindings.filter(f => f.severity === activeFilter) : lastFindings;
+  if (lastFindings.length) $('findingsTools').classList.remove('hidden'); else $('findingsTools').classList.add('hidden');
+  buildCatChips();
+  const list = getFilteredFindings();
   if (!list.length) {
-    $('findings').innerHTML = `<div class="card clean">${icon('i-shield-check','ico-lg')}<div><strong>${activeFilter ? 'No '+activeFilter+' findings' : 'Repository clean'}</strong></div></div>`;
+    const msg = activeFilter ? t('no_filtered', activeFilter) : (findCat || findQuery) ? t('no_match') : t('no_findings');
+    $('findings').innerHTML = `<div class="card clean">${icon('i-shield-check','ico-lg')}<div><strong>${msg}</strong></div></div>`;
     $('findings').classList.remove('hidden');
     return;
   }
-  let html = '';
-  for (const sev of order) {
-    const group = list.filter(f => f.severity === sev);
-    if (!group.length) continue;
-    html += `<div class="group-head" style="color:var(--sev-${SEV_CLASS[sev]})">${icon(SEV_ICON[sev],'ico-sm')} ${sev} · ${group.length}</div>`;
-    for (const f of group) html += findingCard(f);
+  let html = `<div class="findings-title">${t('findings_title')} · ${list.length}</div>`, idx = 0;
+  if (findSort === 'sev') {
+    for (const sev of order) {
+      const group = list.filter(f => f.severity === sev);
+      if (!group.length) continue;
+      html += `<div class="group-head" style="color:var(--sev-${SEV_CLASS[sev]})">${icon(SEV_ICON[sev],'ico-sm')} ${sev} · ${group.length}</div>`;
+      for (const f of group) html += findingCard(f, idx++);
+    }
+  } else {
+    const keyOf = findSort === 'file' ? (f => `${f.file_path||''}`) : (f => `${f.category||''}`);
+    list.sort((a, b) => keyOf(a).localeCompare(keyOf(b)) || order.indexOf(a.severity) - order.indexOf(b.severity));
+    for (const f of list) html += findingCard(f, idx++);
   }
   $('findings').innerHTML = html;
   $('findings').classList.remove('hidden');
 }
 
 function renderScannerStatus(status) {
-  const names = ['deps', 'secrets', 'code', 'config', 'git_history'];
+  const names = ['deps', 'secrets', 'code', 'routes', 'targets', 'auth', 'exposure', 'config', 'git_history'];
+  if (status.network) names.push('network');
   $('scannerStatus').innerHTML = names.map(name => {
     const s = status[name] || {};
     const ok = String(s.status || '').toLowerCase() === 'ok';
     return `
       <div class="status-card ${ok ? 'ok' : 'err'}">
-        <div class="status-name">${esc(name)}</div>
+        <div class="status-name">${esc(t('scanner_names')[name] || name)}</div>
         <div class="status-line">${esc(s.status || 'unknown')} · ${esc(String(s.findings || 0))} findings · ${esc(String((s.errors || []).length))} errors</div>
-      </div>
-    `;
+      </div>`;
   }).join('');
+}
+
+function renderEntryPoints(entryPoints) {
+  const section = $('entryPointsSection');
+  const list = $('entryPoints');
+  if (!section || !list) return;
+  setText('entryPointsTitle', t('entry_points_title'));
+  if (!entryPoints.length) {
+    section.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  section.classList.remove('hidden');
+  list.innerHTML = entryPoints.map(ep => {
+    const confirmed = ep.status === 'CONFIRMED';
+    const badge = confirmed ? t('ep_confirmed') : t('ep_inferred');
+    const ids = (ep.finding_ids || []).map(id => `<span class="scan-chip">${esc(id)}</span>`).join(' ');
+    return `<article class="ep-card ${confirmed ? 'confirmed' : ''}">
+      <div class="ep-top">
+        <span class="ep-badge ${confirmed ? 'confirmed' : 'inferred'}">${esc(badge)}</span>
+        <span class="badge ${SEV_CLASS[ep.severity] || 'info'}">${esc(ep.severity || 'INFO')}</span>
+        <span class="ep-title">${esc(ep.title || '')}</span>
+      </div>
+      <div class="ep-body">${esc(ep.narrative || '')}</div>
+      <div class="ep-ids">${ids}</div>
+    </article>`;
+  }).join('');
+}
+
+function renderSuggestedTargets(urls) {
+  const box = $('targetSuggest');
+  if (!box) return;
+  if (!urls.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = `<span class="target-suggest-label">${esc(t('target_suggest_label'))}</span>` +
+    urls.map(u => `<button type="button" class="target-chip" data-target-use="${esc(u)}" title="${esc(t('target_use'))}">${esc(u.replace(/^https?:\/\//, ''))}</button>`).join('');
 }
 
 function renderInlineCode(text) {
   return (text || '').split('`').map((p, i) => i % 2 ? `<code>${esc(p)}</code>` : esc(p)).join('');
 }
 
-function findingCard(f) {
+function findingCard(f, i) {
   const cls = SEV_CLASS[f.severity] || 'info';
   const loc = f.file_path
     ? `<span class="floc"><span class="path-pill" data-copy="${esc(f.file_path)}" title="Copy path">${esc(f.file_path)}${f.line_number ? ':'+f.line_number : ''}</span></span>` : '';
   const cves = (f.cve_ids||[]).map(c =>
     `<a class="cve" href="https://nvd.nist.gov/vuln/detail/${esc(c)}" target="_blank">${esc(c)}</a>`).join('');
   const catIco = CAT_ICON[f.category] || 'i-info';
-  return `<details class="finding">
+  return `<details class="finding" style="--i:${i}">
     <summary>
       <span class="badge ${cls}">${icon(SEV_ICON[f.severity])}${f.severity}</span>
       <span class="cat">${icon(catIco)}${esc(f.category)}</span>
       <span class="ftitle">${esc(f.title)}</span>
       ${loc}
-      ${f.auto_fixable ? `<span class="fixable">${icon('i-check','ico-sm')}Auto-fixable</span>` : ''}
+      ${f.auto_fixable ? `<span class="fixable">${icon('i-check','ico-sm')}${t('auto_fixable')}</span>` : ''}
       ${icon('i-chevron','chev ico-sm')}
     </summary>
     <div class="fbody">
       <p>${esc(f.description)}</p>
       <pre><code>${esc(f.evidence)}</code></pre>
-      <p><strong>Fix:</strong> ${renderInlineCode(f.fix_suggestion)}</p>
-      ${cves ? `<p><strong>CVEs:</strong> ${cves}</p>` : ''}
+      <p><strong>${t('fix_label')}:</strong> ${renderInlineCode(f.fix_suggestion)}</p>
+      ${cves ? `<p><strong>${t('cves_label')}:</strong> ${cves}</p>` : ''}
     </div>
   </details>`;
 }
 
-// path-pill copy (delegated; don't toggle details)
+/* path-pill copy (delegated; don't toggle details) */
 $('findings').addEventListener('click', e => {
   const pill = e.target.closest('.path-pill'); if (!pill) return;
   e.preventDefault();
@@ -655,17 +1481,31 @@ $('findings').addEventListener('click', e => {
   setTimeout(() => { pill.textContent = orig; }, 1200);
 });
 
+/* history: open (click row / Enter) + delete (two-step confirm, no instant destroy) */
 $('historySection').addEventListener('click', async e => {
-  const openBtn = e.target.closest('[data-scan-open]');
-  if (openBtn) {
-    await openHistoryScan(openBtn.dataset.scanOpen);
+  const delBtn = e.target.closest('[data-scan-delete]');
+  if (delBtn) {
+    e.stopPropagation();
+    if (delBtn.dataset.armed !== '1') {
+      delBtn.dataset.armed = '1';
+      delBtn.classList.add('confirm');
+      delBtn.textContent = 'Delete?';
+      setTimeout(() => { if (delBtn.isConnected) { delBtn.dataset.armed = '0'; delBtn.classList.remove('confirm'); delBtn.innerHTML = icon('i-trash'); } }, 3000);
+      return;
+    }
+    const delId = delBtn.dataset.scanDelete;
+    await fetch(`/api/scans/${encodeURIComponent(delId)}`, { method: 'DELETE' });
+    toast(t('deleted'), 'ok');
+    if (delId === lastScanId) showNewScan();
+    loadHistory(lastRepoUrl, lastScanId);
     return;
   }
-  const deleteBtn = e.target.closest('[data-scan-delete]');
-  if (deleteBtn) {
-    await fetch(`/api/scans/${encodeURIComponent(deleteBtn.dataset.scanDelete)}`, { method: 'DELETE' });
-    loadHistory(lastRepoUrl, lastScanId);
-  }
+  const row = e.target.closest('[data-scan-open]');
+  if (row) await openHistoryScan(row.dataset.scanOpen);
+});
+$('historySection').addEventListener('keydown', e => {
+  const row = e.target.closest('[data-scan-open]');
+  if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openHistoryScan(row.dataset.scanOpen); }
 });
 
 function renderPR(findings) {
@@ -685,7 +1525,7 @@ $('prBtn').addEventListener('click', async () => {
   try {
     const res = await fetch('/api/create-pr', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: $('repoUrl').value.trim(), github_token, finding_ids: ids }),
+      body: JSON.stringify({ repo_url: $('repoUrl').value.trim() || lastRepoUrl, github_token, finding_ids: ids }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'PR failed');
     const d = await res.json();
@@ -695,13 +1535,69 @@ $('prBtn').addEventListener('click', async () => {
   }
 });
 
+function reportSlug() {
+  const base = (lastRepoUrl || 'report').replace('https://github.com/','').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'report';
+  return `cosentinel-${base}-${new Date().toISOString().slice(0,10)}`;
+}
+
 $('dlBtn').addEventListener('click', () => {
   const blob = new Blob([lastReport], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'cosentinel-report.md';
+  a.download = reportSlug() + '.md';
   a.click();
   URL.revokeObjectURL(a.href);
+});
+
+/* PDF: render the markdown into a clean, self-contained A4 sheet (not a screenshot of the app) */
+$('dlPdfBtn').addEventListener('click', async () => {
+  const btn = $('dlPdfBtn');
+  if (btn.dataset.busy === '1') return;
+  const orig = btn.innerHTML;
+  btn.dataset.busy = '1'; btn.disabled = true;
+  btn.innerHTML = `${icon('i-loader','ico-sm spin')} Generating…`;
+
+  const score = $('riskScore').textContent || '';
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'width:760px;padding:48px 56px;background:#fff;color:#19140F;font-family:Inter,system-ui,sans-serif;line-height:1.55;font-size:14px;';
+  sheet.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #19140F;padding-bottom:14px;margin-bottom:8px;">
+      <img src="/static/COSENTINEL.svg" alt="" style="width:30px;height:30px;object-fit:contain;">
+      <div style="font-size:18px;font-weight:700;letter-spacing:.02em;">CoSentinel — Security Report</div>
+      <div style="margin-left:auto;font-size:12px;color:#57514A;font-family:'JetBrains Mono',monospace;">${esc(new Date().toLocaleString())}</div>
+    </div>
+    <div style="font-size:12.5px;color:#57514A;font-family:'JetBrains Mono',monospace;margin-bottom:22px;">
+      ${esc(lastRepoUrl || '')} &nbsp;·&nbsp; Risk ${esc(score)} &nbsp;·&nbsp; ${lastFindings.length} findings
+    </div>
+    <div class="report" style="max-width:none;">${$('report').innerHTML}</div>
+    <div style="margin-top:28px;padding-top:12px;border-top:1px solid #DDD8CD;font-size:11px;color:#8A8378;font-family:'JetBrains Mono',monospace;">
+      Generated by CoSentinel · AI-powered repository security scanner
+    </div>`;
+  // PDF tables read better wrapped than scrolled
+  sheet.querySelectorAll('table').forEach(t => { t.style.display='table'; t.style.overflow='visible'; });
+  sheet.querySelectorAll('th,td').forEach(c => { c.style.whiteSpace='normal'; });
+  sheet.style.position = 'fixed'; sheet.style.left = '-99999px'; sheet.style.top = '0';
+  document.body.appendChild(sheet);
+
+  // wait for the logo image to decode so it isn't blank in the rendered PDF
+  await Promise.all([...sheet.querySelectorAll('img')].map(img =>
+    img.complete ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })));
+
+  try {
+    await html2pdf().set({
+      margin: [12, 12, 14, 12],
+      filename: reportSlug() + '.pdf',
+      image: { type: 'jpeg', quality: 0.96 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['pre', 'tr', 'h2', 'h3'] },
+    }).from(sheet).save();
+  } catch (err) {
+    toast(t('pdf_failed') + ': ' + (err && err.message || err), 'err', 5000);
+  } finally {
+    sheet.remove();
+    btn.innerHTML = orig; btn.disabled = false; btn.dataset.busy = '0';
+  }
 });
 
 $('copyBtn').addEventListener('click', () => {
@@ -711,6 +1607,169 @@ $('copyBtn').addEventListener('click', () => {
   btn.innerHTML = `${icon('i-check','ico-sm')} Copied!`;
   setTimeout(() => { btn.innerHTML = html; }, 2000);
 });
+
+/* ============ ENHANCEMENTS: toasts, theme, shortcuts, deep-link, trend, diff, csv ============ */
+function toast(msg, type, ms) {
+  type = type || 'info'; ms = ms || 3500;
+  const w = $('toastWrap'); if (!w) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + type; el.setAttribute('role', 'status');
+  const ic = type === 'ok' ? 'i-check' : type === 'err' ? 'i-alert' : 'i-info';
+  el.innerHTML = `${icon(ic)}<div>${esc(msg)}</div>`;
+  w.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, ms);
+}
+
+/* ---- theme ---- */
+function applyTheme() { document.documentElement.setAttribute('data-theme', 'light'); }
+function initTheme() { applyTheme(); }
+
+/* ---- deep-link (#/scan/<id>) ---- */
+function setHash(id) { if (!id) return; suppressHash = true; location.hash = `#/scan/${id}`; setTimeout(() => suppressHash = false, 60); }
+function clearHash() { if (!location.hash) return; suppressHash = true; history.replaceState(null, '', location.pathname + location.search); setTimeout(() => suppressHash = false, 60); }
+function routeHash() {
+  const m = location.hash.match(/#\/scan\/(.+)$/);
+  if (m) openHistoryScan(decodeURIComponent(m[1]));
+}
+window.addEventListener('hashchange', () => { if (!suppressHash) routeHash(); });
+
+/* ---- keyboard shortcuts ---- */
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '');
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('historySearch').focus(); }
+  else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { if (!$('scanBtn').disabled) { e.preventDefault(); startScan(); } }
+  else if (!typing && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'n') { showNewScan(); }
+});
+
+/* ---- findings toolbar ---- */
+function refreshFindTools() {
+  if ($('findSearch')) $('findSearch').placeholder = t('find_search_ph');
+  if ($('findSort')) $('findSort').innerHTML =
+    `<option value="sev">${t('sort_sev')}</option><option value="file">${t('sort_file')}</option><option value="cat">${t('sort_cat')}</option>`;
+  if ($('csvBtn')) $('csvBtn').innerHTML = `${icon('i-download','ico-sm')} ${t('export_csv')}`;
+  if ($('cancelBtn')) $('cancelBtn').innerHTML = `${icon('i-alert','ico-sm')} ${t('cancel')}`;
+  if ($('findSort')) $('findSort').value = findSort;
+}
+function exportFindingsCSV() {
+  const list = getFilteredFindings();
+  if (!list.length) { toast(t('no_findings'), 'info'); return; }
+  const cols = ['severity', 'category', 'title', 'file_path', 'line_number', 'cve_ids', 'auto_fixable', 'description'];
+  const cell = v => `"${String(v == null ? '' : Array.isArray(v) ? v.join(';') : v).replace(/"/g, '""')}"`;
+  const rows = [cols.join(',')].concat(list.map(f => cols.map(c => cell(f[c])).join(',')));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = reportSlug() + '-findings.csv'; a.click();
+  URL.revokeObjectURL(a.href);
+  toast(t('export_csv'), 'ok');
+}
+function bindTargetSuggest() {
+  const box = $('targetSuggest');
+  if (!box) return;
+  box.addEventListener('click', e => {
+    const btn = e.target.closest('[data-target-use]');
+    if (!btn) return;
+    $('liveTarget').value = btn.dataset.targetUse;
+    updateScanBtnState();
+    toast(t('target_use'), 'info');
+  });
+}
+function bindFindingsTools() {
+  if ($('findSearch')) $('findSearch').addEventListener('input', () => { findQuery = $('findSearch').value.trim(); renderFindings(); });
+  if ($('findSort')) $('findSort').addEventListener('change', () => { findSort = $('findSort').value; renderFindings(); });
+  if ($('csvBtn')) $('csvBtn').addEventListener('click', exportFindingsCSV);
+  if ($('findCats')) $('findCats').addEventListener('click', e => {
+    const c = e.target.closest('.cat-chip'); if (!c) return;
+    findCat = c.dataset.cat; renderFindings();
+  });
+}
+
+/* ---- trend chart (risk + findings over scans of this repo) ---- */
+function repoScans() {
+  return allScans
+    .filter(s => (s.repo_url && s.repo_url === lastRepoUrl) || (lastData && s.repo_name && s.repo_name === lastData.repo_name))
+    .slice().sort((a, b) => (a.saved_at || 0) - (b.saved_at || 0));
+}
+function drawTrend() {
+  const card = $('trendCard'); if (!card) return;
+  setText('trendTitle', t('trend_title')); setText('trLegRisk', t('trend_risk')); setText('trLegFind', t('trend_findings'));
+  const pts = repoScans();
+  card.classList.remove('hidden');
+  if (pts.length < 2) { $('trendBody').innerHTML = `<div class="trend-empty">${t('trend_empty')}</div>`; return; }
+  $('trendBody').innerHTML = '<div class="trend-canvas-wrap"><canvas id="trendCanvas"></canvas></div>';
+  const cv = $('trendCanvas'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth || 600, H = cv.clientHeight || 160;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const pad = { l: 28, r: 28, t: 14, b: 22 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const css = getComputedStyle(document.documentElement);
+  const cLine = css.getPropertyValue('--line').trim(), cInk = css.getPropertyValue('--ink').trim();
+  const cInk3 = css.getPropertyValue('--ink-3').trim(), cRed = css.getPropertyValue('--red').trim();
+  const risks = pts.map(p => Math.min(10, (p.critical||0)*4 + (p.high||0)*2 + (p.medium||0)*0.5 + (p.low||0)*0.1));
+  const finds = pts.map(p => p.findings_count || 0);
+  const maxF = Math.max(1, ...finds);
+  const X = i => pad.l + (pts.length === 1 ? iw/2 : iw * i / (pts.length - 1));
+  const Yr = v => pad.t + ih * (1 - v / 10);
+  const Yf = v => pad.t + ih * (1 - v / maxF);
+  ctx.strokeStyle = cLine; ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) { const y = pad.t + ih * g / 4; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke(); }
+  function plot(vals, Y, color, w) {
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
+    vals.forEach((v, i) => { const x = X(i), y = Y(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.fillStyle = color;
+    vals.forEach((v, i) => { ctx.beginPath(); ctx.arc(X(i), Y(v), 3, 0, 7); ctx.fill(); });
+  }
+  plot(finds, Yf, cInk, 1.6);
+  plot(risks, Yr, cRed, 2.2);
+  ctx.fillStyle = cInk3; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  pts.forEach((p, i) => {
+    if (pts.length > 8 && i % 2) return;
+    const lbl = (p.commit_sha || p.scan_id || '').slice(0, 6);
+    ctx.fillText(lbl, X(i), H - 6);
+  });
+}
+
+/* ---- diff (compare current scan vs another of same repo) ---- */
+function populateDiff() {
+  const sel = $('diffSelect'); if (!sel) return;
+  setText('diffTitle', t('diff_title'));
+  const others = repoScans().filter(s => s.scan_id !== lastScanId).reverse();
+  if (!others.length) { $('diffBar').classList.add('hidden'); $('diffPanel').innerHTML = ''; return; }
+  $('diffBar').classList.remove('hidden');
+  sel.innerHTML = `<option value="">${t('diff_title')}…</option>` +
+    others.map(s => `<option value="${esc(s.scan_id)}">${esc((s.commit_sha||s.scan_id).slice(0,8))} · ${t('findings_count', s.findings_count || 0)}</option>`).join('');
+  $('diffPanel').innerHTML = '';
+}
+async function runDiff(otherId) {
+  if (!otherId) { $('diffPanel').innerHTML = ''; return; }
+  const res = await fetch(`/api/scans/${encodeURIComponent(otherId)}`);
+  if (!res.ok) { toast(t('error_title'), 'err'); return; }
+  const other = await res.json();
+  const keyOf = f => `${f.severity}|${f.category}|${f.title}|${f.file_path||''}`;
+  const curKeys = new Set(lastFindings.map(keyOf));
+  const oldKeys = new Set((other.findings || []).map(keyOf));
+  const added = lastFindings.filter(f => !oldKeys.has(keyOf(f)));
+  const resolved = (other.findings || []).filter(f => !curKeys.has(keyOf(f)));
+  const row = f => `<div class="diff-row"><span class="dsev" style="color:var(--sev-${SEV_CLASS[f.severity]||'info'})">${esc(f.severity)}</span><span>${esc(f.title)}${f.file_path ? ` · <span class="floc">${esc(f.file_path)}</span>` : ''}</span></div>`;
+  const col = (cls, ico, label, arr) =>
+    `<div class="diff-col ${cls}"><h4>${icon(ico,'ico-sm')} ${label} · ${arr.length}</h4>${arr.length ? arr.map(row).join('') : `<div class="diff-none">${t('diff_none')}</div>`}</div>`;
+  $('diffPanel').innerHTML = col('new', 'i-alert', t('diff_new'), added) + col('resolved', 'i-check', t('diff_resolved'), resolved);
+}
+if ($('diffSelect')) $('diffSelect').addEventListener('change', e => runDiff(e.target.value));
+
+/* ---- cancel button ---- */
+if ($('cancelBtn')) $('cancelBtn').addEventListener('click', cancelScan);
+
+/* ---- init ---- */
+initTheme();
+refreshFindTools();
+bindFindingsTools();
+bindTargetSuggest();
+loadHistory('', '');
+routeHash();
+
 </script>
+<div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="false"></div>
 </body>
 </html>

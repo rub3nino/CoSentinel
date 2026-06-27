@@ -24,6 +24,10 @@ REPORT_STRUCTURE = """Produce a markdown report with EXACTLY these sections and 
 (for each auto-fixable finding: ### [ID] Title, then the exact patch summary and the remediation outcome)
 ## Attack Chains
 (how findings combine, e.g. exposed secret + debug mode = full system compromise)
+## Inferred vs Confirmed Entry Points
+(list each plausible entry path; mark CONFIRMED when backed by live network findings, INFERRED when repo-only)
+## Live Target Findings
+(only if network-category findings exist: summarize confirmed external exposure, missing headers, risky open ports, sensitive paths — no exploit steps)
 ## Remediation Roadmap
 ### Immediate (today)
 ### This Week
@@ -56,15 +60,53 @@ def _format_findings(scan_result: ScanResult) -> str:
     return "\n".join(blocks) if blocks else "No findings."
 
 
-def analyze(repo_url: str, scan_result: ScanResult, model: str = None) -> str:
+def _format_entry_points(entry_points: list[dict]) -> str:
+    if not entry_points:
+        return "No pre-computed entry points."
+    lines = []
+    for ep in entry_points:
+        ids = ", ".join(ep.get("finding_ids", []))
+        lines.append(
+            f"[{ep.get('id')}] {ep.get('status')} | {ep.get('severity')} | likelihood={ep.get('likelihood')}\n"
+            f"Title: {ep.get('title')}\n"
+            f"Path: {ep.get('narrative')}\n"
+            f"Findings: {ids}\n"
+            "---"
+        )
+    return "\n".join(lines)
+
+
+def analyze(
+    repo_url: str,
+    scan_result: ScanResult,
+    model: str = None,
+    live_target: str | None = None,
+    entry_points: list[dict] | None = None,
+) -> str:
     counts = {s: len(scan_result.by_severity(s)) for s in Severity}
     stats = ", ".join(f"{s.value}: {counts[s]}" for s in Severity)
     auto_fixable = [f for f in scan_result.findings if f.auto_fixable]
+    network_findings = [f for f in scan_result.findings if f.category == "network"]
+    target_findings = [f for f in scan_result.findings if f.category == "target"]
+    live_block = ""
+    if live_target:
+        live_block = (
+            f"Live target validated: {live_target}\n"
+            f"Network findings: {len(network_findings)} (confirmed external checks)\n"
+        )
+    elif network_findings:
+        live_block = f"Network findings: {len(network_findings)}\n"
+    if target_findings:
+        live_block += "Declared deploy targets in repo:\n"
+        live_block += "\n".join(f"- {f.title.split(': ', 1)[-1]}" for f in target_findings[:8])
+        live_block += "\n"
 
     user_prompt = (
         f"Repository: {repo_url}\n"
         f"Total findings: {len(scan_result.findings)} ({stats})\n"
-        f"Auto-fixable findings: {len(auto_fixable)}\n\n"
+        f"Auto-fixable findings: {len(auto_fixable)}\n"
+        f"{live_block}\n"
+        f"PRE-COMPUTED ENTRY POINTS:\n{_format_entry_points(entry_points or [])}\n\n"
         f"FINDINGS:\n{_format_findings(scan_result)}\n\n"
         f"{REPORT_STRUCTURE}"
     )

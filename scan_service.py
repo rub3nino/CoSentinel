@@ -128,6 +128,9 @@ def _save_cache(
     duration_sec: float,
     started_at: str,
     finished_at: str,
+    entry_points: list[dict] | None = None,
+    live_target: str = "",
+    suggested_targets: list[str] | None = None,
 ) -> str:
     scan_key = _scan_key(repo_url, commit_sha)
     SCAN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -139,11 +142,16 @@ def _save_cache(
         "scan_key": scan_key,
         "saved_at": time.time(),
         "findings": [_serialize_finding(f) for f in findings],
+        "findings_count": len(findings),
+        "auto_fixable_count": len([f for f in findings if f.auto_fixable]),
         "scan_errors": scan_errors,
         "scanner_status": scanner_status,
         "duration_sec": duration_sec,
         "started_at": started_at,
         "finished_at": finished_at,
+        "entry_points": entry_points or [],
+        "live_target": live_target,
+        "suggested_targets": suggested_targets or [],
     }
     _scan_path(scan_id).write_text(json.dumps(payload), encoding="utf-8")
     index = _load_index()
@@ -208,6 +216,31 @@ def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
         if not existing or _severity_rank(finding.severity) > _severity_rank(existing.severity):
             deduped[key] = finding
     return list(deduped.values())
+
+
+def _append_exposure_section(report: str, findings: list[Finding]) -> str:
+    exposure_findings = [f for f in findings if f.category == "exposure"]
+    if not exposure_findings:
+        return report
+    lines = [
+        "## Exposure Findings",
+        "",
+        "Authorized inventory of exposed ports and services found in repository configs.",
+        "",
+    ]
+    for finding in exposure_findings:
+        loc = f"{finding.file_path}:{finding.line_number}" if finding.file_path and finding.line_number else finding.file_path or "n/a"
+        lines.extend(
+            [
+                f"### [{finding.id}] {finding.title}",
+                f"- Severity: {finding.severity.value}",
+                f"- Location: {loc}",
+                f"- Evidence: `{finding.evidence}`",
+                f"- Fix: {finding.fix_suggestion}",
+                "",
+            ]
+        )
+    return report.rstrip() + "\n\n" + "\n".join(lines).rstrip() + "\n"
 
 
 def _unified_diff(path: str, original: str, updated: str) -> str | None:
@@ -343,10 +376,12 @@ def scan_repository(
     github_token: str = "",
     model: str | None = None,
     progress_cb: Callable[[dict], None] | None = None,
+    live_target: str | None = None,
 ) -> dict:
     import agent
+    import attack_graph
     import fetcher
-    from scanners import code, config_audit, deps, secrets
+    from scanners import auth, code, config_audit, deps, exposure, routes, secrets, targets
 
     local_path = None
     started_at = time.perf_counter()
@@ -363,20 +398,34 @@ def scan_repository(
 
         _emit(progress_cb, 2, "Scanning dependencies...")
         _emit(progress_cb, 3, "Detecting secrets...")
-        _emit(progress_cb, 4, "Auditing source code...")
-        _emit(progress_cb, 5, "Auditing configuration files...")
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        _emit(progress_cb, 4, "Auditing source code and routes...")
+        _emit(progress_cb, 5, "Checking authorized exposure...")
+        _emit(progress_cb, 6, "Auditing configuration files...")
+        with ThreadPoolExecutor(max_workers=8) as pool:
             dep_fut = pool.submit(_run_scanner, deps.scan_dependencies, local_path)
             sec_fut = pool.submit(_run_scanner, secrets.scan_secrets, local_path, all_files)
             code_fut = pool.submit(_run_scanner, code.scan_code, local_path, all_files)
+            route_fut = pool.submit(_run_scanner, routes.scan_routes, local_path, all_files)
+            tgt_fut = pool.submit(_run_scanner, targets.scan_targets, local_path, all_files)
+            auth_fut = pool.submit(_run_scanner, auth.scan_auth, local_path, all_files)
+            exp_fut = pool.submit(_run_scanner, exposure.scan_exposure, local_path, all_files)
             cfg_fut = pool.submit(_run_scanner, config_audit.scan_config, local_path, all_files)
-            dep_res, sec_res, code_res, cfg_res = [f.result() for f in (dep_fut, sec_fut, code_fut, cfg_fut)]
+            dep_res, sec_res, code_res, route_res, tgt_res, auth_res, exp_res, cfg_res = [
+                f.result()
+                for f in (dep_fut, sec_fut, code_fut, route_fut, tgt_fut, auth_fut, exp_fut, cfg_fut)
+            ]
 
         dep_findings, dep_errors = dep_res
         sec_findings, sec_errors = sec_res
         code_findings, code_errors = code_res
+        route_findings, route_errors = route_res
+        tgt_findings, tgt_errors = tgt_res
+        auth_findings, auth_errors = auth_res
+        exp_findings, exp_errors = exp_res
         cfg_findings, cfg_errors = cfg_res
-        scan_errors.extend(dep_errors + sec_errors + code_errors + cfg_errors)
+        scan_errors.extend(
+            dep_errors + sec_errors + code_errors + route_errors + tgt_errors + auth_errors + exp_errors + cfg_errors
+        )
 
         scanner_status["deps"] = {
             "status": "ok" if not dep_errors else "error",
@@ -393,6 +442,26 @@ def scan_repository(
             "findings": len(code_findings),
             "errors": code_errors,
         }
+        scanner_status["routes"] = {
+            "status": "ok" if not route_errors else "error",
+            "findings": len(route_findings),
+            "errors": route_errors,
+        }
+        scanner_status["targets"] = {
+            "status": "ok" if not tgt_errors else "error",
+            "findings": len(tgt_findings),
+            "errors": tgt_errors,
+        }
+        scanner_status["auth"] = {
+            "status": "ok" if not auth_errors else "error",
+            "findings": len(auth_findings),
+            "errors": auth_errors,
+        }
+        scanner_status["exposure"] = {
+            "status": "ok" if not exp_errors else "error",
+            "findings": len(exp_findings),
+            "errors": exp_errors,
+        }
         scanner_status["config"] = {
             "status": "ok" if not cfg_errors else "error",
             "findings": len(cfg_findings),
@@ -400,7 +469,7 @@ def scan_repository(
         }
 
         try:
-            _emit(progress_cb, 6, "Scanning git history...")
+            _emit(progress_cb, 7, "Scanning git history...")
             from scanners.git_history import scan_git_history
             git_findings, git_errors = _run_scanner(scan_git_history, local_path)
             scan_errors.extend(git_errors)
@@ -415,8 +484,44 @@ def scan_repository(
             "errors": git_errors,
         }
 
-        findings = _dedupe_findings(dep_findings + sec_findings + code_findings + cfg_findings + git_findings)
+        net_findings: list[Finding] = []
+        if live_target:
+            try:
+                _emit(progress_cb, 8, f"Validating entry points on {live_target}...")
+                from scanners.network import scan_network
+                net_findings, net_errors = _run_scanner(scan_network, live_target.strip())
+                scan_errors.extend(net_errors)
+                scanner_status["network"] = {
+                    "status": "ok" if not net_errors else "error",
+                    "findings": len(net_findings),
+                    "errors": net_errors,
+                    "target": live_target.strip(),
+                }
+            except Exception as exc:
+                scan_errors.append(f"scanners.network: {exc}")
+                scanner_status["network"] = {
+                    "status": "error",
+                    "findings": 0,
+                    "errors": [str(exc)],
+                    "target": live_target.strip(),
+                }
+
+        ai_step = 9 if live_target else 8
+        findings = _dedupe_findings(
+            dep_findings
+            + sec_findings
+            + code_findings
+            + route_findings
+            + tgt_findings
+            + auth_findings
+            + exp_findings
+            + cfg_findings
+            + git_findings
+            + net_findings
+        )
         _attach_fix_patches(local_path, findings)
+        suggested_targets = targets.list_target_urls(tgt_findings)
+        entry_points = attack_graph.build_entry_points(findings, live_target.strip() if live_target else None)
 
         result = ScanResult(
             repo_url=repo_url,
@@ -426,8 +531,17 @@ def scan_repository(
             scan_errors=scan_errors,
         )
 
-        _emit(progress_cb, 7, "AI analysis with Regolo...")
-        report = agent.analyze(repo_url, result, model or None)
+        _emit(progress_cb, ai_step, "AI analysis with Regolo...")
+        report = _append_exposure_section(
+            agent.analyze(
+                repo_url,
+                result,
+                model or None,
+                live_target=live_target.strip() if live_target else None,
+                entry_points=entry_points,
+            ),
+            findings,
+        )
         duration_sec = round(time.perf_counter() - started_at, 3)
         finished_at = _now_iso()
         scan_key = _save_cache(
@@ -441,12 +555,17 @@ def scan_repository(
             duration_sec,
             started_iso,
             finished_at,
+            entry_points=entry_points,
+            live_target=live_target.strip() if live_target else "",
+            suggested_targets=suggested_targets,
         )
 
         return {
             "scan_id": scan_id,
             "report": report,
             "findings": [_serialize_finding(f) for f in findings],
+            "entry_points": entry_points,
+            "suggested_targets": suggested_targets,
             "stats": {
                 "critical": result.critical_count(),
                 "high": result.high_count(),
@@ -465,6 +584,7 @@ def scan_repository(
             "duration_sec": duration_sec,
             "scan_errors": scan_errors,
             "scanner_status": scanner_status,
+            "live_target": live_target.strip() if live_target else "",
         }
     finally:
         if local_path:
@@ -497,6 +617,33 @@ def get_cache_metadata(repo_url: str) -> dict | None:
     }
 
 
+def _severity_counts(findings: list[dict]) -> dict:
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for f in findings:
+        sev = str(f.get("severity", "")).lower()
+        if sev in counts:
+            counts[sev] += 1
+    return counts
+
+
+def _history_item(cached: dict, scan_id: str, repo_url: str = "") -> dict:
+    counts = _severity_counts(cached.get("findings", []))
+    return {
+        "scan_id": cached.get("scan_id", scan_id),
+        "repo_url": cached.get("repo_url", repo_url),
+        "repo_name": cached.get("repo_name", ""),
+        "commit_sha": cached.get("commit_sha", ""),
+        "scan_key": cached.get("scan_key", ""),
+        "saved_at": cached.get("saved_at"),
+        "duration_sec": cached.get("duration_sec"),
+        "findings_count": cached.get("findings_count", len(cached.get("findings", []))),
+        "auto_fixable_count": cached.get("auto_fixable_count", 0),
+        "scan_errors": cached.get("scan_errors", []),
+        "stats": counts,
+        **counts,  # flatten critical/high/medium/low for convenience
+    }
+
+
 def list_scan_history(repo_url: str) -> list[dict]:
     history = _load_history()
     repo_history = history.get(_repo_key(repo_url), [])
@@ -505,19 +652,25 @@ def list_scan_history(repo_url: str) -> list[dict]:
         cached = _load_cache_by_scan_id(scan_id)
         if not cached:
             continue
-        out.append(
-            {
-                "scan_id": cached.get("scan_id", scan_id),
-                "repo_url": cached.get("repo_url", repo_url),
-                "repo_name": cached.get("repo_name", ""),
-                "commit_sha": cached.get("commit_sha", ""),
-                "scan_key": cached.get("scan_key", ""),
-                "saved_at": cached.get("saved_at"),
-                "duration_sec": cached.get("duration_sec"),
-                "findings_count": len(cached.get("findings", [])),
-                "scan_errors": cached.get("scan_errors", []),
-            }
-        )
+        out.append(_history_item(cached, scan_id, repo_url))
+    return out
+
+
+def list_all_scan_history() -> list[dict]:
+    """Every scan across all repositories, newest first."""
+    history = _load_history()
+    out = []
+    seen = set()
+    for repo_key, ids in history.items():
+        for scan_id in ids:
+            if scan_id in seen:
+                continue
+            cached = _load_cache_by_scan_id(scan_id)
+            if not cached:
+                continue
+            seen.add(scan_id)
+            out.append(_history_item(cached, scan_id))
+    out.sort(key=lambda r: r.get("saved_at") or 0, reverse=True)
     return out
 
 

@@ -13,7 +13,11 @@ import scan_service
 import server
 import pr_creator
 from models import Finding, Severity
-from scanners import code, config_audit, deps, secrets
+from scanners import auth, code, config_audit, deps, exposure, routes, secrets, targets
+
+_REAL_SCAN_ROUTES = routes.scan_routes
+_REAL_SCAN_TARGETS = targets.scan_targets
+_REAL_SCAN_AUTH = auth.scan_auth
 
 
 class BackendSmokeTest(unittest.TestCase):
@@ -28,6 +32,9 @@ class BackendSmokeTest(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "init"], cwd=self.tmp, check=True, capture_output=True)
         self.repo_url = "https://github.com/example/demo-smoke"
         self._patches = []
+        self._patch(routes, "scan_routes", lambda local_path, all_files: [])
+        self._patch(targets, "scan_targets", lambda local_path, all_files: [])
+        self._patch(auth, "scan_auth", lambda local_path, all_files: [])
 
     def tearDown(self):
         for obj, name, value in reversed(self._patches):
@@ -60,8 +67,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: findings)
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
         self._patch(pr_creator, "create_fix_pr", lambda repo_url, github_token, finding_ids, all_findings: f"pr://{len(finding_ids)}:{len(all_findings)}")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
@@ -80,7 +88,11 @@ class BackendSmokeTest(unittest.TestCase):
 
         health = asyncio.run(server.health())
         self.assertEqual(health["status"], "ok")
+        self.assertIn("exposure", health["scanners"])
         self.assertIn("git_history", health["scanners"])
+        self.assertIn("routes", health["scanners"])
+        self.assertIn("targets", health["scanners"])
+        self.assertIn("auth", health["scanners"])
 
     def test_progress_events_are_emitted(self):
         self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
@@ -89,8 +101,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         events = []
 
@@ -103,7 +116,8 @@ class BackendSmokeTest(unittest.TestCase):
                 "Fetching repository...",
                 "Scanning dependencies...",
                 "Detecting secrets...",
-                "Auditing source code...",
+                "Auditing source code and routes...",
+                "Checking authorized exposure...",
                 "Auditing configuration files...",
                 "Scanning git history...",
                 "AI analysis with Regolo...",
@@ -122,8 +136,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: (_ for _ in ()).throw(RuntimeError("deps boom")))
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertEqual(result["stats"]["scan_errors"], 1)
@@ -198,8 +213,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [duplicate, duplicate])
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertEqual(len(result["findings"]), 1)
@@ -225,8 +241,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [finding])
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
         self._patch(scan_service, "SCAN_CACHE_DIR", cache_dir)
         self._patch(scan_service, "SCAN_INDEX_PATH", cache_dir / "latest_index.json")
         self._patch(scan_service, "SCAN_HISTORY_PATH", cache_dir / "history_index.json")
@@ -265,8 +282,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
         self._patch(code, "scan_code", lambda local_path, all_files: [finding])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertEqual(len(result["findings"]), 1)
@@ -295,8 +313,9 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
         self._patch(code, "scan_code", lambda local_path, all_files: [finding])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertTrue(result["findings"][0]["auto_fixable"])
@@ -323,12 +342,213 @@ class BackendSmokeTest(unittest.TestCase):
         self._patch(deps, "scan_dependencies", lambda local_path: [])
         self._patch(secrets, "scan_secrets", lambda local_path, all_files: [finding])
         self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
         self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
 
         result = scan_service.scan_repository(self.repo_url, "", None)
         self.assertTrue(result["findings"][0]["auto_fixable"])
         self.assertIn("CHANGE_ME", result["findings"][0]["fix_patch"])
+
+    def test_exposure_scan_detects_public_bindings(self):
+        compose = os.path.join(self.tmp, "docker-compose.yml")
+        with open(compose, "w", encoding="utf-8") as fh:
+            fh.write(
+                "services:\n"
+                "  app:\n"
+                "    ports:\n"
+                "      - '0.0.0.0:8080:80'\n"
+            )
+
+        findings = exposure.scan_exposure(self.tmp, ["docker-compose.yml"])
+        self.assertTrue(any("Public bind on all interfaces" in f.title for f in findings))
+
+    def test_report_includes_exposure_section(self):
+        finding = Finding(
+            id="EXP-001",
+            severity=Severity.MEDIUM,
+            category="exposure",
+            title="docker-compose: Published host port",
+            description="exposure",
+            file_path="docker-compose.yml",
+            line_number=4,
+            evidence="- '8080:80'",
+            fix_suggestion="publish only what must be public",
+            auto_fixable=False,
+        )
+        with open(os.path.join(self.tmp, "docker-compose.yml"), "w", encoding="utf-8") as fh:
+            fh.write("services:\n  app:\n    ports:\n      - '8080:80'\n")
+        self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
+        self._patch(fetcher, "list_repo_files", lambda local_path: ["docker-compose.yml"])
+        self._patch(fetcher, "cleanup_repo", lambda local_path: None)
+        self._patch(deps, "scan_dependencies", lambda local_path: [])
+        self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
+        self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [finding])
+        self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
+
+        result = scan_service.scan_repository(self.repo_url, "", None)
+        self.assertIn("## Exposure Findings", result["report"])
+        self.assertIn("[EXP-001] docker-compose: Published host port", result["report"])
+
+
+    def test_live_target_triggers_network_scan(self):
+        net_finding = Finding(
+            id="NET-001",
+            severity=Severity.MEDIUM,
+            category="network",
+            title="Missing HSTS header",
+            description="HSTS not set",
+            file_path=None,
+            line_number=None,
+            evidence="Header absent",
+            fix_suggestion="Add HSTS",
+            auto_fixable=False,
+        )
+
+        self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
+        self._patch(fetcher, "list_repo_files", lambda local_path: ["a.py"])
+        self._patch(fetcher, "cleanup_repo", lambda local_path: None)
+        self._patch(deps, "scan_dependencies", lambda local_path: [])
+        self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
+        self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
+        self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
+        self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
+
+        import scanners.network as network_mod
+        self._patch(network_mod, "scan_network", lambda target: [net_finding])
+
+        events = []
+        result = scan_service.scan_repository(
+            self.repo_url, "", None, lambda event: events.append(event), "scanme.nmap.org"
+        )
+        self.assertEqual(result["live_target"], "scanme.nmap.org")
+        self.assertEqual(result["scanner_status"]["network"]["findings"], 1)
+        self.assertTrue(any(f["category"] == "network" for f in result["findings"]))
+        labels = [e["label"] for e in events if e.get("type") == "progress"]
+        self.assertIn("Validating entry points on scanme.nmap.org...", labels)
+        self.assertEqual(labels[-1], "AI analysis with Regolo...")
+
+
+    def test_attack_graph_links_debug_and_exposure(self):
+        exp = Finding(
+            id="EXP-001",
+            severity=Severity.HIGH,
+            category="exposure",
+            title="docker-compose: Public bind on all interfaces",
+            description="exposure",
+            file_path="docker-compose.yml",
+            line_number=4,
+            evidence="0.0.0.0:8080",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        dbg = Finding(
+            id="CODE-001",
+            severity=Severity.MEDIUM,
+            category="code",
+            title="Debug Mode",
+            description="debug",
+            file_path="app.py",
+            line_number=1,
+            evidence="debug=True",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        import attack_graph
+
+        eps = attack_graph.build_entry_points([exp, dbg])
+        self.assertTrue(any(ep["title"] == "Public debug surface" for ep in eps))
+        self.assertEqual(eps[0]["status"], "INFERRED")
+
+    def test_routes_scanner_flags_admin_without_auth(self):
+        with open(os.path.join(self.tmp, "views.py"), "w", encoding="utf-8") as fh:
+            fh.write("@app.route('/admin/dashboard')\ndef admin():\n    return 'ok'\n")
+        found = _REAL_SCAN_ROUTES(self.tmp, ["views.py"])
+        self.assertEqual(len(found), 1)
+        self.assertIn("admin", found[0].title)
+
+    def test_scan_returns_entry_points(self):
+        exp = Finding(
+            id="EXP-001",
+            severity=Severity.HIGH,
+            category="exposure",
+            title="docker-compose: Public bind on all interfaces",
+            description="exposure",
+            file_path="docker-compose.yml",
+            line_number=4,
+            evidence="0.0.0.0:8080",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        dbg = Finding(
+            id="CODE-001",
+            severity=Severity.MEDIUM,
+            category="code",
+            title="Debug Mode",
+            description="debug",
+            file_path="app.py",
+            line_number=1,
+            evidence="debug=True",
+            fix_suggestion="fix",
+            auto_fixable=False,
+        )
+        self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
+        self._patch(fetcher, "list_repo_files", lambda local_path: ["app.py", "docker-compose.yml"])
+        self._patch(fetcher, "cleanup_repo", lambda local_path: None)
+        self._patch(deps, "scan_dependencies", lambda local_path: [])
+        self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
+        self._patch(code, "scan_code", lambda local_path, all_files: [dbg])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [exp])
+        self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
+
+        result = scan_service.scan_repository(self.repo_url, "", None)
+        self.assertIn("entry_points", result)
+        self.assertTrue(any(ep["title"] == "Public debug surface" for ep in result["entry_points"]))
+
+
+    def test_targets_and_auth_scanners(self):
+        with open(os.path.join(self.tmp, "README.md"), "w", encoding="utf-8") as fh:
+            fh.write("Live at https://staging.example.com\n")
+        with open(os.path.join(self.tmp, "auth.py"), "w", encoding="utf-8") as fh:
+            fh.write("jwt.decode(token, verify=False)\n")
+        tg = _REAL_SCAN_TARGETS(self.tmp, ["README.md"])
+        au = _REAL_SCAN_AUTH(self.tmp, ["auth.py"])
+        self.assertTrue(any("staging.example.com" in f.title for f in tg))
+        self.assertTrue(any(f.title == "JWT verify disabled" for f in au))
+
+    def test_attack_graph_secret_plus_target(self):
+        sec = Finding(
+            id="SEC-001", severity=Severity.CRITICAL, category="secret", title="OpenAI Key detected",
+            description="secret", file_path=".env", line_number=1, evidence="sk-***", fix_suggestion="rotate", auto_fixable=False,
+        )
+        tgt = Finding(
+            id="TGT-001", severity=Severity.INFO, category="target", title="Deploy target declared: https://api.example.com",
+            description="target", file_path="README.md", line_number=1, evidence="https://api.example.com", fix_suggestion="scope", auto_fixable=False,
+        )
+        import attack_graph
+        eps = attack_graph.build_entry_points([sec, tgt])
+        self.assertTrue(any("declared target" in ep["title"] for ep in eps))
+
+    def test_scan_returns_suggested_targets(self):
+        tgt = Finding(
+            id="TGT-001", severity=Severity.INFO, category="target", title="Deploy target declared: https://api.example.com",
+            description="target", file_path="README.md", line_number=1, evidence="https://api.example.com", fix_suggestion="scope", auto_fixable=False,
+        )
+        self._patch(fetcher, "fetch_repo", lambda repo_url, github_token="": (self.tmp, "demo-smoke"))
+        self._patch(fetcher, "list_repo_files", lambda local_path: ["README.md"])
+        self._patch(fetcher, "cleanup_repo", lambda local_path: None)
+        self._patch(deps, "scan_dependencies", lambda local_path: [])
+        self._patch(secrets, "scan_secrets", lambda local_path, all_files: [])
+        self._patch(code, "scan_code", lambda local_path, all_files: [])
+        self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
+        self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
+        self._patch(targets, "scan_targets", lambda local_path, all_files: [tgt])
+
+        result = scan_service.scan_repository(self.repo_url, "", None)
+        self.assertEqual(result["suggested_targets"], ["https://api.example.com"])
 
 
 if __name__ == "__main__":

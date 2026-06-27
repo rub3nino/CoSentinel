@@ -24,6 +24,7 @@ class ScanRequest(BaseModel):
     repo_url: str
     github_token: str = ""
     model: str = ""
+    live_target: str = ""  # optional: IP or URL to run offensive tools against
 
 
 class PRRequest(BaseModel):
@@ -48,7 +49,7 @@ async def health():
     return {
         "status": "ok",
         "model": config.REGOLO_MODEL,
-        "scanners": ["deps", "secrets", "code", "config", "git_history"],
+        "scanners": ["deps", "secrets", "code", "routes", "targets", "auth", "exposure", "config", "git_history", "network"],
     }
 
 
@@ -59,17 +60,19 @@ async def scan(req: ScanRequest):
     loop = asyncio.get_event_loop()
     try:
         return await loop.run_in_executor(
-            None, scan_repository, req.repo_url, req.github_token, req.model or None
+            None, scan_repository, req.repo_url, req.github_token, req.model or None, None, req.live_target or None
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/scans")
-async def scans(repo_url: str):
-    from scan_service import list_scan_history
+async def scans(repo_url: str | None = None):
+    from scan_service import list_all_scan_history, list_scan_history
 
-    return {"scans": list_scan_history(repo_url)}
+    if repo_url:
+        return {"scans": list_scan_history(repo_url)}
+    return {"scans": list_all_scan_history()}
 
 
 @app.get("/api/scans/{scan_id}")
@@ -92,7 +95,7 @@ async def delete_scan(scan_id: str):
 
 
 @app.get("/api/scan/stream")
-async def scan_stream(repo_url: str, github_token: str = "", model: str = ""):
+async def scan_stream(repo_url: str, github_token: str = "", model: str = "", live_target: str = ""):
     """SSE endpoint: streams progress events then the final result."""
     from scan_service import scan_repository
 
@@ -107,7 +110,7 @@ async def scan_stream(repo_url: str, github_token: str = "", model: str = ""):
             loop.call_soon_threadsafe(queue.put_nowait, event)
 
         future = loop.run_in_executor(
-            None, scan_repository, repo_url, github_token, model or None, progress_cb
+            None, scan_repository, repo_url, github_token, model or None, progress_cb, live_target or None
         )
 
         def mark_done(_):

@@ -11,7 +11,7 @@ import pr_creator
 import scan_service
 import server
 import fetcher
-from scanners import code, config_audit, deps, secrets
+from scanners import auth, code, config_audit, deps, exposure, routes, secrets, targets
 from models import Finding, Severity
 
 
@@ -53,10 +53,22 @@ class ServerHttpTest(unittest.TestCase):
         self.assertEqual(models.status_code, 200)
         self.assertEqual(models.json()["models"], ["gpt-4o", "gpt-4o-mini"])
 
+    def test_root_includes_authorized_toolkit(self):
+        root = self.client.get("/")
+        self.assertEqual(root.status_code, 200)
+        body = root.text
+        self.assertIn("Toolkit difensivo autorizzato", body)
+        self.assertIn("Controllo esposizione", body)
+        self.assertIn("Scansione segreti", body)
+        self.assertIn("Scansione cronologia", body)
+        self.assertIn("Seleziona lingua", body)
+        self.assertIn('data-jump="scanCard"', body)
+        self.assertIn('data-jump="reportSection"', body)
+
     def test_scan_and_create_pr_routes(self):
         finding = self._sample_finding()
 
-        def fake_scan(repo_url, github_token="", model=None, progress_cb=None):
+        def fake_scan(repo_url, github_token="", model=None, progress_cb=None, live_target=None):
             if progress_cb:
                 progress_cb({"type": "progress", "step": 1, "label": "Fetching repository...", "timestamp": "2026-01-01T00:00:00+00:00"})
             return {
@@ -98,7 +110,7 @@ class ServerHttpTest(unittest.TestCase):
         self.assertEqual(pr.json()["pr_url"], "https://github.com/example/pr/1")
 
     def test_scan_stream_emits_events(self):
-        def fake_scan(repo_url, github_token="", model=None, progress_cb=None):
+        def fake_scan(repo_url, github_token="", model=None, progress_cb=None, live_target=None):
             if progress_cb:
                 progress_cb({"type": "progress", "step": 1, "label": "Fetching repository...", "timestamp": "2026-01-01T00:00:00+00:00"})
                 progress_cb({"type": "progress", "step": 2, "label": "Scanning dependencies...", "timestamp": "2026-01-01T00:00:01+00:00"})
@@ -135,8 +147,12 @@ class ServerHttpTest(unittest.TestCase):
             self._patch(deps, "scan_dependencies", lambda local_path: [])
             self._patch(secrets, "scan_secrets", lambda local_path, all_files: [finding])
             self._patch(code, "scan_code", lambda local_path, all_files: [])
+            self._patch(exposure, "scan_exposure", lambda local_path, all_files: [])
             self._patch(config_audit, "scan_config", lambda local_path, all_files: [])
-            self._patch(agent, "analyze", lambda repo_url, scan_result, model=None: "report")
+            self._patch(routes, "scan_routes", lambda local_path, all_files: [])
+            self._patch(targets, "scan_targets", lambda local_path, all_files: [])
+            self._patch(auth, "scan_auth", lambda local_path, all_files: [])
+            self._patch(agent, "analyze", lambda repo_url, scan_result, model=None, live_target=None, entry_points=None: "report")
             self._patch(scan_service, "SCAN_CACHE_DIR", cache_dir)
             self._patch(scan_service, "SCAN_INDEX_PATH", cache_dir / "latest_index.json")
             self._patch(scan_service, "SCAN_HISTORY_PATH", cache_dir / "history_index.json")
