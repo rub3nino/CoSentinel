@@ -189,7 +189,7 @@ def scan_dependencies(local_path: str) -> list[Finding]:
                         if fixed_version
                         else "Upgrade to latest version"
                     ),
-                    auto_fixable=bool(fixed_version),
+                    auto_fixable=False,
                 )
             )
             counter += 1

@@ -22,6 +22,8 @@ REPORT_STRUCTURE = """Produce a markdown report with EXACTLY these sections and 
 (for each: ### [ID] Title, then Impact, Evidence quoted, and the exact fix command or code)
 ## Fix-Ready Findings
 (for each auto-fixable finding: ### [ID] Title, then the exact patch summary and the remediation outcome)
+## Recommended PR Bundle
+(if two auto-fixable findings are a good mechanical bundle, recommend the exact pair and say why they can ship together)
 ## Attack Chains
 (how findings combine, e.g. exposed secret + debug mode = full system compromise)
 ## Inferred vs Confirmed Entry Points
@@ -41,9 +43,9 @@ def get_available_models() -> list[str]:
     try:
         resp = client.models.list()
         models = [m.id for m in resp.data]
-        return models or ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
+        return models or [config.REGOLO_MODEL, "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
     except Exception:
-        return ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
+        return [config.REGOLO_MODEL, "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
 
 
 def _format_findings(scan_result: ScanResult) -> str:
@@ -76,12 +78,28 @@ def _format_entry_points(entry_points: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_pr_candidates(pr_candidates: list[dict]) -> str:
+    if not pr_candidates:
+        return "No recommended PR bundle."
+    lines = []
+    for item in pr_candidates[:2]:
+        lines.append(
+            f"[{item.get('id')}] {item.get('severity')} | {item.get('title')}\n"
+            f"File: {item.get('file_path') or 'n/a'}\n"
+            f"Fix: {item.get('fix_suggestion') or 'n/a'}\n"
+            f"Patch: {'yes' if item.get('fix_patch') else 'no'}\n"
+            "---"
+        )
+    return "\n".join(lines)
+
+
 def analyze(
     repo_url: str,
     scan_result: ScanResult,
     model: str = None,
     live_target: str | None = None,
     entry_points: list[dict] | None = None,
+    pr_candidates: list[dict] | None = None,
 ) -> str:
     counts = {s: len(scan_result.by_severity(s)) for s in Severity}
     stats = ", ".join(f"{s.value}: {counts[s]}" for s in Severity)
@@ -107,6 +125,7 @@ def analyze(
         f"Auto-fixable findings: {len(auto_fixable)}\n"
         f"{live_block}\n"
         f"PRE-COMPUTED ENTRY POINTS:\n{_format_entry_points(entry_points or [])}\n\n"
+        f"RECOMMENDED PR BUNDLE:\n{_format_pr_candidates(pr_candidates or [])}\n\n"
         f"FINDINGS:\n{_format_findings(scan_result)}\n\n"
         f"{REPORT_STRUCTURE}"
     )

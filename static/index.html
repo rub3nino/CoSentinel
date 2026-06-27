@@ -860,6 +860,7 @@ const I18N = {
     ep_confirmed: 'CONFERMATO',
     ep_inferred: 'INFERITO',
     findings_title: 'Rilevamenti',
+    patch_preview_label: 'Anteprima patch PR',
     auto_fixable: 'Correggibile automaticamente',
     fix_label: 'Correzione',
     cves_label: 'CVE',
@@ -952,6 +953,7 @@ const I18N = {
     ep_confirmed: 'CONFIRMED',
     ep_inferred: 'INFERRED',
     findings_title: 'Findings',
+    patch_preview_label: 'PR patch preview',
     auto_fixable: 'Auto-fixable',
     fix_label: 'Fix',
     cves_label: 'CVEs',
@@ -1548,6 +1550,7 @@ function findingCard(f, i) {
       <pre><code>${esc(f.evidence)}</code></pre>
       <p><strong>${t('fix_label')}:</strong> ${renderInlineCode(f.fix_suggestion)}</p>
       ${cves ? `<p><strong>${t('cves_label')}:</strong> ${cves}</p>` : ''}
+      ${f.fix_patch ? `<p><strong>${t('patch_preview_label')}:</strong></p><pre><code>${esc(f.fix_patch)}</code></pre>` : ''}
     </div>
   </details>`;
 }
@@ -1610,28 +1613,35 @@ $('historySection').addEventListener('keydown', e => {
 function renderPR(findings) {
   const fixable = findings.filter(f => f.auto_fixable);
   if (!fixable.length) { $('prSection').classList.add('hidden'); return; }
+  const prTitle = document.querySelector('#prSection .card-title');
+  if (prTitle) prTitle.innerHTML = `${icon('i-pr')} Recommended PR Bundle`;
   $('prList').innerHTML = fixable.map(f =>
     `<label class="pr-item"><input type="checkbox" class="prChk" value="${f.id}" checked> ${esc(f.title)}</label>`).join('');
   $('prSection').classList.remove('hidden');
 }
 
-$('prBtn').addEventListener('click', async () => {
-  const ids = [...document.querySelectorAll('.prChk:checked')].map(c => c.value);
-  if (!ids.length) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}Select at least one finding.</div>`; return; }
-  const github_token = $('token').value.trim();
-  if (!github_token) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}GitHub token required to create a PR.</div>`; return; }
-  $('prResult').textContent = 'Creating PR…';
-  try {
-    const res = await fetch('/api/create-pr', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: $('repoUrl').value.trim() || lastRepoUrl, github_token, finding_ids: ids }),
-    });
-    if (!res.ok) throw new Error((await res.json()).detail || 'PR failed');
-    const d = await res.json();
-    $('prResult').innerHTML = `${icon('i-check','ico-sm')} <a href="${esc(d.pr_url)}" target="_blank">${esc(d.pr_url)} ${icon('i-external','ico-sm')}</a>`;
-  } catch (err) {
-    $('prResult').innerHTML = `<div class="err">${icon('i-alert')}${esc(err.message)}</div>`;
-  }
+  $('prBtn').addEventListener('click', async () => {
+    const ids = [...document.querySelectorAll('.prChk:checked')].map(c => c.value);
+    if (!ids.length) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}Select at least one finding.</div>`; return; }
+    const github_token = $('token').value.trim();
+    if (!github_token) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}GitHub token required to create a PR.</div>`; return; }
+    $('prResult').textContent = 'Creating PR…';
+    try {
+      const res = await fetch('/api/create-pr', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: $('repoUrl').value.trim() || lastRepoUrl, github_token, finding_ids: ids }),
+      });
+      if (!res.ok) {
+        const raw = await res.text();
+        let msg = raw || 'PR failed';
+        try { msg = JSON.parse(raw).detail || JSON.parse(raw).message || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      const d = await res.json();
+      $('prResult').innerHTML = `${icon('i-check','ico-sm')} <a href="${esc(d.pr_url)}" target="_blank">${esc(d.pr_url)} ${icon('i-external','ico-sm')}</a>`;
+    } catch (err) {
+      $('prResult').innerHTML = `<div class="err">${icon('i-alert')}${esc(err.message)}</div>`;
+    }
 });
 
 function reportSlug() {

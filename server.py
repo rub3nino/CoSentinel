@@ -72,6 +72,8 @@ async def scan(req: ScanRequest):
             None, scan_repository, req.repo_url, req.github_token, req.model or None, None, req.live_target or None
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -149,13 +151,30 @@ async def scan_stream(repo_url: str, github_token: str = "", model: str = "", li
 @app.post("/api/create-pr")
 async def create_pr(req: PRRequest):
     from pr_creator import create_fix_pr
+    from fix_patches import select_pr_candidates
     from scan_service import get_cached_findings
 
-    findings = get_cached_findings(req.repo_url)
-    if not findings:
-        raise HTTPException(status_code=400, detail="No cached scan findings for this repository. Run a scan first.")
-    pr_url = create_fix_pr(req.repo_url, req.github_token, req.finding_ids, findings)
-    return {"pr_url": pr_url}
+    try:
+        findings = get_cached_findings(req.repo_url)
+        if not findings:
+            raise HTTPException(status_code=400, detail="No cached scan findings for this repository. Run a scan first.")
+        recommended = select_pr_candidates(findings, limit=2)
+        recommended_ids = [f.id for f in recommended]
+        if not recommended_ids:
+            raise HTTPException(status_code=400, detail="No auto-fixable findings with validated patches found.")
+        if sorted(req.finding_ids) != sorted(recommended_ids):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Use the recommended PR bundle only: {', '.join(recommended_ids)}",
+            )
+        pr_url = create_fix_pr(req.repo_url, req.github_token, req.finding_ids, findings)
+        return {"pr_url": pr_url}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _serialize(finding) -> dict:

@@ -50,6 +50,7 @@ def scan_network(target: str) -> list[Finding]:
     web_url = target if is_web else f"http://{host}"
 
     findings += _nmap_basic(host)
+    findings += _nmap_vuln(host)
     findings += _check_headers(web_url)
     findings += _check_tls(host)
     findings += _check_dns(host)

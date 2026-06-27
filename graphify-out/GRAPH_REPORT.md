@@ -1,16 +1,16 @@
 # Graph Report - CoSentinel  (2026-06-27)
 
 ## Corpus Check
-- 41 files · ~47,468 words
+- 43 files · ~48,431 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 505 nodes · 712 edges · 47 communities (44 shown, 3 thin omitted)
-- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 74 edges (avg confidence: 0.75)
+- 536 nodes · 770 edges · 49 communities (46 shown, 3 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 91 edges (avg confidence: 0.75)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2ee053a3`
+- Built from commit: `7adfb727`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -55,32 +55,34 @@
 - [[_COMMUNITY_Community 43|Community 43]]
 - [[_COMMUNITY_Community 44|Community 44]]
 - [[_COMMUNITY_Community 45|Community 45]]
+- [[_COMMUNITY_Community 47|Community 47]]
+- [[_COMMUNITY_Community 48|Community 48]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Finding` - 41 edges
+1. `Finding` - 45 edges
 2. `BackendSmokeTest` - 32 edges
 3. `build_entry_points()` - 17 edges
 4. `scanner_status` - 15 edges
-5. `scan_repository()` - 13 edges
-6. `_save_cache()` - 12 edges
-7. `ServerHttpTest` - 12 edges
-8. `2. Phases (each = what / how / why-rule)` - 12 edges
-9. `create_fix_pr()` - 11 edges
-10. `list_all_scan_history()` - 11 edges
+5. `scan_repository()` - 14 edges
+6. `list_all_scan_history()` - 14 edges
+7. `create_fix_pr()` - 13 edges
+8. `_save_cache()` - 12 edges
+9. `ServerHttpTest` - 12 edges
+10. `scan_network()` - 12 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `create_fix_pr()` --calls--> `can_fix()`  [INFERRED]
+  pr_creator.py → fix_patches.py
 - `delete_scan()` --calls--> `delete_scan_record()`  [INFERRED]
   server.py → scan_service.py
 - `create_pr()` --calls--> `create_fix_pr()`  [INFERRED]
   server.py → pr_creator.py
-- `ScanRequest` --uses--> `Finding`  [INFERRED]
-  server.py → models.py
-- `PRRequest` --uses--> `Finding`  [INFERRED]
-  server.py → models.py
-- `scan_detail()` --calls--> `get_scan_record()`  [INFERRED]
-  server.py → scan_service.py
+- `_apply_patch_commit()` --calls--> `validate_patch()`  [INFERRED]
+  pr_creator.py → fix_patches.py
+- `_apply_patch_commit()` --calls--> `apply_unified_diff()`  [INFERRED]
+  pr_creator.py → fix_patches.py
 
-## Communities (47 total, 3 thin omitted)
+## Communities (49 total, 3 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.11
@@ -103,12 +105,12 @@ Cohesion: 0.09
 Nodes (21): commit_sha, duration_sec, entry_points, findings, finished_at, live_target, repo_name, scan_errors (+13 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.10
-Nodes (42): _append_exposure_section(), _attach_fix_patches(), _cache_path(), _dedupe_findings(), delete_scan_record(), _emit(), get_cache_metadata(), get_scan_record() (+34 more)
+Cohesion: 0.09
+Nodes (45): _append_exposure_section(), _attach_fix_patches(), _cache_path(), _dedupe_findings(), delete_scan_record(), _emit(), get_cache_metadata(), get_scan_record() (+37 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.09
-Nodes (29): fetch_repo(), list_repo_files(), _local_repo_path(), _normalize_repo_url(), _repo_name_from_url(), _extract_fixed_version(), _find_dependency_files(), _parse_gemfile_lock() (+21 more)
+Cohesion: 0.11
+Nodes (21): fetch_repo(), list_repo_files(), _local_repo_path(), _normalize_repo_url(), _repo_key(), _repo_name_from_url(), Run git log and scan added lines for secrets.     Return [] on any failure., scan_git_history() (+13 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.50
@@ -123,12 +125,12 @@ Cohesion: 0.12
 Nodes (16): 2a: Replace fetch POST with EventSource SSE, 2b: Progress steps now show REAL labels from SSE, 2c: Add findings count badge to navbar when scan completes, 2d: Add "Copy Report" button next to "Download Report", 2e: Improve finding cards, code:python (from fastapi.responses import StreamingResponse), code:javascript (// OLD: fetch POST), code:block3 (● 47 findings  (red dot if any CRITICAL/HIGH, yellow if MEDI) (+8 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.17
-Nodes (18): _apply_patch_commit(), _apply_unified_diff(), _branch_name(), _can_fix(), create_fix_pr(), _gh(), _gh_patch(), _gh_post() (+10 more)
+Cohesion: 0.16
+Nodes (19): _apply_patch_commit(), _apply_unified_diff(), _branch_name(), _can_fix(), create_fix_pr(), _gh(), _gh_patch(), _gh_post() (+11 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.09
-Nodes (26): BaseModel, ScanResult, Severity, _deserialize_finding(), get_cached_findings(), _cache_key(), _cache_path(), create_pr() (+18 more)
+Nodes (27): BaseModel, ScanResult, Severity, _deserialize_finding(), get_cached_findings(), _cache_key(), _cache_path(), create_pr() (+19 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.10
@@ -139,7 +141,7 @@ Cohesion: 0.08
 Nodes (23): 0. Why this doc exists, 1.1 Color tokens (light) — "document grey + scan blue", 1.2 Spacing / radius / shadow / z (token scales), 1.3 Fonts, 1. Skill verdict (ui-ux-pro-max), 2. Phases (each = what / how / why-rule), 3. Ponytail cut (deliberate skips), 4. Build order (impact ÷ effort) (+15 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.31
+Cohesion: 0.32
 Nodes (16): _check_dns(), _check_headers(), _check_tls(), _extract_grep(), _extract_port_line(), _gobuster(), _next_id(), _nikto() (+8 more)
 
 ### Community 21 - "Community 21"
@@ -230,6 +232,14 @@ Nodes (4): targets, errors, findings, status
 Cohesion: 0.50
 Nodes (4): trivy, errors, findings, status
 
+### Community 47 - "Community 47"
+Cohesion: 0.13
+Nodes (18): apply_unified_diff(), attach_fix_patches(), can_fix(), _fix_line(), issue_name(), _mask_env_secret(), _propose_fix(), Generate and validate mechanical auto-fix patches for PR creation. (+10 more)
+
+### Community 48 - "Community 48"
+Cohesion: 0.33
+Nodes (9): _extract_fixed_version(), _find_dependency_files(), _parse_gemfile_lock(), _parse_go_mod(), _parse_package_json(), _parse_pom_xml(), _parse_requirements(), scan_dependencies() (+1 more)
+
 ## Knowledge Gaps
 - **155 isolated node(s):** `scan_id`, `findings`, `entry_points`, `suggested_targets`, `critical` (+150 more)
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -238,17 +248,17 @@ Nodes (4): trivy, errors, findings, status
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Finding` connect `Community 0` to `Community 6`, `Community 7`, `Community 17`, `Community 20`, `Community 21`, `Community 23`, `Community 25`?**
-  _High betweenness centrality (0.115) - this node is a cross-community bridge._
-- **Why does `_deserialize_finding()` connect `Community 17` to `Community 0`, `Community 5`?**
-  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **Why does `Finding` connect `Community 0` to `Community 6`, `Community 7`, `Community 47`, `Community 48`, `Community 17`, `Community 20`, `Community 21`, `Community 23`, `Community 25`?**
+  _High betweenness centrality (0.125) - this node is a cross-community bridge._
 - **Why does `EntryPoint` connect `Community 21` to `Community 0`, `Community 17`?**
   _High betweenness centrality (0.034) - this node is a cross-community bridge._
-- **Are the 40 inferred relationships involving `Finding` (e.g. with `EntryPoint` and `BackendSmokeTest`) actually correct?**
-  _`Finding` has 40 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `_deserialize_finding()` connect `Community 17` to `Community 0`, `Community 5`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **Are the 44 inferred relationships involving `Finding` (e.g. with `EntryPoint` and `BackendSmokeTest`) actually correct?**
+  _`Finding` has 44 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 2 inferred relationships involving `BackendSmokeTest` (e.g. with `Finding` and `Severity`) actually correct?**
   _`BackendSmokeTest` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 15 inferred relationships involving `str` (e.g. with `scan()` and `scan_repository()`) actually correct?**
-  _`str` has 15 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Creates a GitHub PR with auto-fixes for the specified finding_ids.     Returns t`, `Apply fix_patch as a file update commit on the branch.`, `Minimal unified diff applier for single-file patches.` to the rest of the system?**
-  _187 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Are the 16 inferred relationships involving `str` (e.g. with `scan()` and `create_pr()`) actually correct?**
+  _`str` has 16 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `Creates a GitHub PR with auto-fixes for the specified finding_ids.     Returns t`, `SSE endpoint: streams progress events then the final result.`, `Every scan across all repositories, newest first.` to the rest of the system?**
+  _197 weakly-connected nodes found - possible documentation gaps or missing edges._

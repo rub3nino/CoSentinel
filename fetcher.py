@@ -1,3 +1,4 @@
+import hashlib
 import os
 import shutil
 import subprocess
@@ -5,6 +6,10 @@ import time
 from pathlib import Path
 
 import config
+
+
+def _repo_key(repo_url: str) -> str:
+    return hashlib.sha256(repo_url.encode("utf-8")).hexdigest()[:12]
 
 
 def _local_repo_path(repo_url: str) -> Path | None:
@@ -48,18 +53,28 @@ def fetch_repo(repo_url: str, github_token: str = "") -> tuple[str, str]:
 
     clone_url = _normalize_repo_url(repo_url, github_token)
     repo_name = _repo_name_from_url(repo_url)
-    dest = Path(config.CLONE_BASE_DIR) / f"{repo_name}_{int(time.time())}"
+    repo_key = _repo_key(repo_url)
+    dest = Path(config.CLONE_BASE_DIR) / f"{repo_name}_{repo_key}"
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if (dest / ".git").exists():
+        # Clean repository to prevent conflicts during pull
+        subprocess.run(["git", "-C", str(dest), "reset", "--hard"], capture_output=True)
+        subprocess.run(["git", "-C", str(dest), "clean", "-fd"], capture_output=True)
         result = subprocess.run(
             ["git", "-C", str(dest), "pull"],
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or "git pull failed")
-        return str(dest), repo_name
+        if result.returncode == 0:
+            try:
+                # Update mtime of destination folder to indicate active usage
+                dest.touch()
+            except OSError:
+                pass
+            return str(dest), repo_name
+        else:
+            shutil.rmtree(dest, ignore_errors=True)
 
     if dest.exists():
         shutil.rmtree(dest, ignore_errors=True)
@@ -96,12 +111,9 @@ def list_repo_files(local_path: str) -> list[str]:
 
 
 def cleanup_repo(local_path: str) -> None:
-    path = Path(local_path).resolve()
-    clone_root = Path(config.CLONE_BASE_DIR).resolve()
-    # ponytail: only delete ephemeral clones under CLONE_BASE_DIR, never file:// demo repos
-    if clone_root not in path.parents and path.parent != clone_root:
-        return
-    shutil.rmtree(local_path, ignore_errors=True)
+    # ponytail: do not delete clones immediately to allow reuse for speed on consecutive scans.
+    # Stale clones are pruned by scan_service._prune_stale_clones().
+    pass
 
 
 if __name__ == "__main__":

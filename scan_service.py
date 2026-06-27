@@ -1,5 +1,4 @@
 import hashlib
-import difflib
 import json
 import os
 import re
@@ -101,20 +100,13 @@ def _prune_stale_clones() -> None:
     for entry in base.iterdir():
         if not entry.is_dir() or entry.name == ".scan_cache":
             continue
-        match = re.search(r"_(\d+)$", entry.name)
-        if not match:
-            continue
         try:
-            created_at = int(match.group(1))
-        except ValueError:
-            continue
-        if now - created_at > CLONE_RETENTION_SECONDS:
-            try:
+            mtime = entry.stat().st_mtime
+            if now - mtime > CLONE_RETENTION_SECONDS:
                 import shutil
-
                 shutil.rmtree(entry, ignore_errors=True)
-            except Exception:
-                pass
+        except Exception:
+            pass
 
 
 def _save_cache(
@@ -131,6 +123,7 @@ def _save_cache(
     entry_points: list[dict] | None = None,
     live_target: str = "",
     suggested_targets: list[str] | None = None,
+    pr_candidates: list[dict] | None = None,
 ) -> str:
     scan_key = _scan_key(repo_url, commit_sha)
     SCAN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -152,6 +145,7 @@ def _save_cache(
         "entry_points": entry_points or [],
         "live_target": live_target,
         "suggested_targets": suggested_targets or [],
+        "pr_candidates": pr_candidates or [],
     }
     _scan_path(scan_id).write_text(json.dumps(payload), encoding="utf-8")
     index = _load_index()
@@ -241,106 +235,6 @@ def _append_exposure_section(report: str, findings: list[Finding]) -> str:
             ]
         )
     return report.rstrip() + "\n\n" + "\n".join(lines).rstrip() + "\n"
-
-
-def _unified_diff(path: str, original: str, updated: str) -> str | None:
-    if original == updated:
-        return None
-    diff = difflib.unified_diff(
-        original.splitlines(keepends=True),
-        updated.splitlines(keepends=True),
-        fromfile=path,
-        tofile=path,
-        lineterm="",
-    )
-    patch = "\n".join(diff)
-    return patch if patch.strip() else None
-
-
-def _replace_once(content: str, old: str, new: str) -> str | None:
-    if old not in content:
-        return None
-    return content.replace(old, new, 1)
-
-
-def _replace_regex_once(content: str, pattern: str, replacement: str) -> str | None:
-    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
-    if count == 0 or updated == content:
-        return None
-    return updated
-
-
-def _remove_line(content: str, needle: str) -> str | None:
-    lines = content.splitlines(keepends=True)
-    updated = [line for line in lines if needle not in line]
-    if len(updated) == len(lines):
-        return None
-    return "".join(updated)
-
-
-def _mask_env_secret(content: str) -> str | None:
-    updated, count = re.subn(
-        r"(?m)^(\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*)(['\"]?)[^#\n\r]+(\2)",
-        r"\1\g<2>CHANGE_ME\3",
-        content,
-        count=1,
-    )
-    if count == 0 or updated == content:
-        return None
-    return updated
-
-
-def _attach_fix_patches(local_path: str, findings: list[Finding]) -> None:
-    contents: dict[str, str] = {}
-
-    def read_file(rel_path: str) -> str | None:
-        if rel_path in contents:
-            return contents[rel_path]
-        abs_path = os.path.join(local_path, rel_path)
-        try:
-            text = Path(abs_path).read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            return None
-        contents[rel_path] = text
-        return text
-
-    for finding in findings:
-        if finding.fix_patch:
-            continue
-        if not finding.file_path:
-            continue
-        original = read_file(finding.file_path)
-        if original is None:
-            continue
-        updated = None
-        title = finding.title
-
-        if title in {"Hardcoded Bind All", "Hardcoded Bind All detected", "Exposed on all interfaces", "Exposed on all interfaces detected"}:
-            updated = _replace_once(original, "0.0.0.0", "127.0.0.1")
-        elif title in {"Shell Injection", "Shell Injection detected"} and finding.file_path.endswith(".py"):
-            updated = _replace_regex_once(original, r"shell\s*=\s*True", "shell=False")
-        elif title in {"Debug Mode", "Debug Mode detected"}:
-            updated = _replace_once(original, "debug=True", "debug=False") or _replace_once(original, "debug = True", "debug = False")
-        elif title in {"Privileged Container", "Privileged Container detected", "Privileged mode hint", "Privileged mode hint detected"}:
-            updated = _remove_line(original, "privileged: true") or _remove_line(original, "--privileged")
-        elif title in {"World Writable", "World Writable detected"}:
-            updated = _replace_once(original, "chmod 777", "chmod 755") or _replace_once(original, "chmod a+w", "chmod u+w") or _replace_once(original, "chmod o+w", "chmod u+w")
-        elif title in {"Unquoted Variable", "Unquoted Variable detected"}:
-            updated = re.subn(r"\[\s+\$([A-Za-z_][A-Za-z0-9_]*)\s+([=!])", r'[ "$\1" \2', original, count=1)[0]
-            if updated == original:
-                updated = None
-        elif title in {"TLS Skip Verify", "TLS Skip Verify detected"}:
-            updated = _replace_once(original, "InsecureSkipVerify: true", "InsecureSkipVerify: false")
-        elif finding.file_path.endswith((".env.example", ".env.sample")) and any(
-            token in title for token in ("Secret", "Key", "Token", "Credential", "Password")
-        ):
-            updated = _mask_env_secret(original)
-
-        if updated and updated != original:
-            patch = _unified_diff(finding.file_path, original, updated)
-            if patch:
-                finding.fix_patch = patch
-                finding.auto_fixable = True
 
 
 def _severity_rank(severity: Severity) -> int:
@@ -590,7 +484,10 @@ def scan_repository(
             + wb_findings
             + net_findings
         )
-        _attach_fix_patches(local_path, findings)
+        from fix_patches import attach_fix_patches, select_pr_candidates
+
+        attach_fix_patches(local_path, findings)
+        pr_candidates = [f.__dict__ | {"severity": f.severity.value} for f in select_pr_candidates(findings, limit=2)]
         suggested_targets = targets.list_target_urls(tgt_findings)
         entry_points = attack_graph.build_entry_points(findings, effective_live or None)
 
@@ -603,16 +500,37 @@ def scan_repository(
         )
 
         _emit(progress_cb, ai_step, "AI analysis with Regolo...")
-        report = _append_exposure_section(
-            agent.analyze(
-                repo_url,
-                result,
-                model or None,
-                live_target=effective_live or None,
-                entry_points=entry_points,
-            ),
-            findings,
-        )
+        try:
+            try:
+                report = agent.analyze(
+                    repo_url,
+                    result,
+                    model or None,
+                    live_target=effective_live or None,
+                    entry_points=entry_points,
+                    pr_candidates=pr_candidates,
+                )
+            except TypeError as exc:
+                if "pr_candidates" not in str(exc):
+                    raise
+                report = agent.analyze(
+                    repo_url,
+                    result,
+                    model or None,
+                    live_target=effective_live or None,
+                    entry_points=entry_points,
+                )
+        except Exception as exc:
+            # ponytail: keep the scan usable when the AI endpoint is down.
+            report = (
+                "# CoSentinel Report\n\n"
+                "## Executive Summary\n"
+                f"AI analysis unavailable: {exc}\n\n"
+                "## Remediation Roadmap\n"
+                "- Review the findings list below.\n"
+                "- Fix critical and high issues first.\n"
+            )
+        report = _append_exposure_section(report, findings)
         duration_sec = round(time.perf_counter() - started_at, 3)
         finished_at = _now_iso()
         scan_key = _save_cache(
@@ -629,6 +547,7 @@ def scan_repository(
             entry_points=entry_points,
             live_target=effective_live,
             suggested_targets=suggested_targets,
+            pr_candidates=pr_candidates,
         )
 
         return {
@@ -637,6 +556,7 @@ def scan_repository(
             "findings": [_serialize_finding(f) for f in findings],
             "entry_points": entry_points,
             "suggested_targets": suggested_targets,
+            "pr_candidates": pr_candidates,
             "stats": {
                 "critical": result.critical_count(),
                 "high": result.high_count(),
