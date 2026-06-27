@@ -1,0 +1,122 @@
+{
+  "/Users/ruben/Progetti/CoSentinel/server.py": {
+    "mtime": 1782552918.5659714,
+    "ast_hash": "6d3aa8ca11f821316064502e033da6ac",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/config.py": {
+    "mtime": 1782550394.0988758,
+    "ast_hash": "36b6e2e5d0dd85060750ef0726e450d2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/models.py": {
+    "mtime": 1782548357.5621607,
+    "ast_hash": "7aa4eba240c4652526b0b4e79134e0ca",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/agent.py": {
+    "mtime": 1782550065.237975,
+    "ast_hash": "03838a354877b1075d3110b9075c2d56",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/fetcher.py": {
+    "mtime": 1782550077.670313,
+    "ast_hash": "a930c3884bc4dc1e49dd342e053738d0",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/.codex/hooks.json": {
+    "mtime": 1782549443.4986696,
+    "ast_hash": "169bab21ada34d04a90289216f2e09cc",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/deps.py": {
+    "mtime": 1782550079.7904654,
+    "ast_hash": "866cad413a2dfd5335d570cacb6f1b02",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/config_audit.py": {
+    "mtime": 1782550050.2592268,
+    "ast_hash": "b1c115356eba98df20dafdfc06ca1c02",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/code.py": {
+    "mtime": 1782551177.918856,
+    "ast_hash": "c88998c364efbbd637eddbf3e41195a7",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/__init__.py": {
+    "mtime": 1782548349.4430506,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/FOR_CODEX.md": {
+    "mtime": 1782549715.970285,
+    "ast_hash": "dda72e9e108438d34835d05697a0552f",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/BUILDER_PROMPTS.md": {
+    "mtime": 1782548818.246263,
+    "ast_hash": "f32efb7c1138d94adccff644b9470adb",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/AGENTS.md": {
+    "mtime": 1782549567.5540645,
+    "ast_hash": "d1a51813a7463db8cc30150c012d13a7",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/FOR_CLAUDE_CODE.md": {
+    "mtime": 1782549855.211786,
+    "ast_hash": "092f322616240784577c00d8fce5bbc3",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/pr_creator.py": {
+    "mtime": 1782553205.0357873,
+    "ast_hash": "411ebecbf66e6a184900536de292ec4d",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scanners/git_history.py": {
+    "mtime": 1782550946.5807054,
+    "ast_hash": "6ecd12fbf68ea29846de1e198e6a230f",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/FOR_CODEX_V2.md": {
+    "mtime": 1782550594.529263,
+    "ast_hash": "bc459cb7d4cc7ac3d0ec050e17634108",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/FOR_CLAUDE_CODE_V2.md": {
+    "mtime": 1782550667.8486142,
+    "ast_hash": "c63f04b180244be1c7ce07a5fdbe8d63",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/static/index.html": {
+    "mtime": 1782553412.8434002,
+    "ast_hash": "892d6b85c22d3a7f6271b0c7b0b10994",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/scan_service.py": {
+    "mtime": 1782553194.6011345,
+    "ast_hash": "41ea3fcb6eb0248ba832a27207af0eb2",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/tests/test_backend_smoke.py": {
+    "mtime": 1782553244.2195468,
+    "ast_hash": "1abd2114eb57fda596903d825b09e8c8",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/README.md": {
+    "mtime": 1782551270.6221178,
+    "ast_hash": "f3b36f6bc5c5fec8de0ca148aa5aad91",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/UI_UX_PLAN.md": {
+    "mtime": 1782552016.4500763,
+    "ast_hash": "3969acf4af59aea5560420a425109bd4",
+    "semantic_hash": ""
+  },
+  "/Users/ruben/Progetti/CoSentinel/tests/test_server_http.py": {
+    "mtime": 1782553438.9244478,
+    "ast_hash": "201f91390c98b0402825d91456cdd828",
+    "semantic_hash": ""
+  }
+}

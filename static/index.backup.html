@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoSentinel — AI Security Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    /* color tokens — document grey + scan blue (light only) */
+    --color-primary: #1E293B;
+    --color-on-primary: #FFFFFF;
+    --color-secondary: #334155;
+    --color-accent: #2563EB;
+    --color-accent-hover: #1D4ED8;
+    --color-background: #F8FAFC;
+    --color-surface: #FFFFFF;
+    --color-foreground: #0F172A;
+    --color-muted: #64748B;
+    --color-border: #E4E5E7;
+    --color-destructive: #DC2626;
+    /* severity */
+    --sev-crit: #DC2626; --sev-crit-bg: #FEF2F2; --sev-crit-bd: #FECACA;
+    --sev-high: #C2410C; --sev-high-bg: #FFF7ED; --sev-high-bd: #FED7AA;
+    --sev-med:  #A16207; --sev-med-bg:  #FEFCE8; --sev-med-bd:  #FEF08A;
+    --sev-low:  #2563EB; --sev-low-bg:  #EFF6FF; --sev-low-bd:  #BFDBFE;
+    --sev-info: #475569; --sev-info-bg: #F1F5F9; --sev-info-bd: #E2E8F0;
+    --ok: #15803D; --ok-bg: #F0FDF4; --ok-bd: #BBF7D0;
+    /* scales */
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
+    --sh-1: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+    --sh-2: 0 4px 12px rgba(15,23,42,.08);
+    --sh-3: 0 12px 32px rgba(15,23,42,.14);
+    --font-ui: 'Fira Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', ui-monospace, monospace;
+    --ico-sm: 16px; --ico-md: 20px; --ico-lg: 24px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-ui); background: var(--color-background);
+    color: var(--color-foreground); line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .ico { width: var(--ico-md); height: var(--ico-md); stroke: currentColor; fill: none;
+    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+  .ico-sm { width: var(--ico-sm); height: var(--ico-sm); }
+  .ico-lg { width: var(--ico-lg); height: var(--ico-lg); }
+
+  /* focus */
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  button, input, select { font-family: inherit; }
+
+  /* nav */
+  nav { position: sticky; top: 0; background: rgba(248,250,252,.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-border); z-index: 100; }
+  nav .wrap { display: flex; justify-content: space-between; align-items: center; height: 60px; gap: 16px; }
+  .brand { font-weight: 700; font-size: 18px; display: inline-flex; align-items: center; gap: 8px; color: var(--color-primary); }
+  .brand .ico { color: var(--color-accent); }
+  .nav-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
+  .nav-link { color: var(--color-muted); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .nav-link:hover { color: var(--color-foreground); text-decoration: none; }
+  .nav-badge { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid var(--color-border); background: var(--color-surface); }
+  .nav-badge .nb-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .nav-cta { font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: var(--r-md);
+    background: var(--color-primary); color: var(--color-on-primary); transition: background .2s ease; }
+  .nav-cta:hover { background: var(--color-secondary); text-decoration: none; }
+
+  /* hero */
+  .hero { padding: 104px 24px 72px; text-align: center; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border);
+    border-radius: var(--r-pill); padding: 6px 14px; font-size: 13px; color: var(--color-muted);
+    margin-bottom: 28px; background: var(--color-surface); }
+  .pill .live { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(21,128,61,.15); }
+  h1 { font-size: clamp(2.5rem, 8vw, 5.25rem); font-weight: 800; line-height: 1.04;
+    letter-spacing: -0.04em; color: var(--color-primary); }
+  .subtitle { color: var(--color-muted); font-size: clamp(1rem, 2.2vw, 1.18rem); max-width: 580px; margin: 24px auto 0; }
+  .hero-actions { display: flex; gap: 12px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
+
+  /* card + form */
+  .card { border: 1px solid var(--color-border); border-radius: var(--r-lg); padding: 24px;
+    background: var(--color-surface); box-shadow: var(--sh-1); }
+  .scan-card { max-width: 680px; margin: 0 auto 48px; }
+  label.field-label { display: block; font-size: 13px; font-weight: 500; color: var(--color-secondary); margin-bottom: 6px; }
+  .helper { font-size: 12px; color: var(--color-muted); margin-top: 6px; }
+  input, select { font-size: 15px; border: 1px solid var(--color-border); border-radius: var(--r-md);
+    height: 46px; padding: 0 14px; width: 100%; background: var(--color-surface); color: var(--color-foreground);
+    transition: border-color .15s ease, box-shadow .15s ease; }
+  input::placeholder { color: #94A3B8; }
+  input:focus, select:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  input.invalid { border-color: var(--color-destructive); }
+  .field { margin-bottom: 16px; }
+  .row { display: flex; gap: 12px; margin-bottom: 16px; }
+  .row .grow { flex: 1; }
+  .row .model { flex: 0 0 180px; }
+  .check-row { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 20px; font-size: 14px; color: var(--color-secondary); }
+  .check-row input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--color-accent); cursor: pointer; }
+  .check-row label { cursor: pointer; }
+
+  .btn { height: 46px; background: var(--color-primary); color: var(--color-on-primary); border: none;
+    border-radius: var(--r-md); font-size: 15px; font-weight: 500; cursor: pointer; width: 100%;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .2s ease, transform .08s ease; }
+  .btn:hover { background: var(--color-secondary); }
+  .btn:active { transform: scale(.985); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-accent { background: var(--color-accent); }
+  .btn-accent:hover { background: var(--color-accent-hover); }
+  .btn-ghost { background: var(--color-surface); color: var(--color-foreground); border: 1px solid var(--color-border); }
+  .btn-ghost:hover { background: var(--color-background); }
+  .btn-sm { height: 40px; width: auto; padding: 0 18px; font-size: 14px; }
+
+  .hidden { display: none !important; }
+  section.block { margin-bottom: 36px; }
+
+  /* progress */
+  .progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .progress-head h3 { font-size: 16px; font-weight: 600; }
+  .progress-meta { font-family: var(--font-mono); font-size: 13px; color: var(--color-muted); }
+  .steps { list-style: none; }
+  .steps li { display: flex; align-items: center; gap: 12px; padding: 9px 0; color: var(--color-muted); font-size: 15px; }
+  .steps .marker { width: 22px; height: 22px; flex: 0 0 22px; display: grid; place-items: center; }
+  .steps .marker .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-border); }
+  .steps .marker .ico { display: none; }
+  .steps li.active { color: var(--color-foreground); }
+  .steps li.active .dot { display: none; }
+  .steps li.active .marker .spin { display: block; color: var(--color-accent); animation: spin 1s linear infinite; }
+  .steps li.done { color: var(--color-foreground); }
+  .steps li.done .dot { display: none; }
+  .steps li.done .marker .check { display: block; color: var(--ok); animation: pop .2s ease; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* results */
+  .risk-card { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+  .risk-score { font-family: var(--font-mono); font-size: 44px; font-weight: 600; line-height: 1; }
+  .risk-info .risk-label { font-weight: 600; font-size: 16px; }
+  .risk-info .risk-sub { color: var(--color-muted); font-size: 13px; margin-top: 2px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi { border: 1px solid var(--color-border); border-radius: var(--r-md); padding: 14px 16px; background: var(--color-surface);
+    cursor: pointer; transition: box-shadow .2s ease, transform .08s ease, border-color .2s ease; text-align: left; }
+  .kpi:hover { box-shadow: var(--sh-2); }
+  .kpi:active { transform: scale(.99); }
+  .kpi.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .kpi .kpi-count { font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1; }
+  .kpi .kpi-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; margin-top: 6px; }
+  .kpi.crit .kpi-count, .kpi.crit .kpi-label { color: var(--sev-crit); }
+  .kpi.high .kpi-count, .kpi.high .kpi-label { color: var(--sev-high); }
+  .kpi.med  .kpi-count, .kpi.med  .kpi-label { color: var(--sev-med); }
+  .kpi.low  .kpi-count, .kpi.low  .kpi-label { color: var(--sev-low); }
+  .meta { color: var(--color-muted); font-size: 13px; }
+  .scan-meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
+  .scan-chip { border: 1px solid var(--color-border); border-radius: var(--r-pill); background: var(--color-surface); padding: 5px 10px; font-size: 12px; color: var(--color-secondary); }
+  .status-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 16px; }
+  .status-card { border: 1px solid var(--color-border); border-radius: var(--r-md); padding: 12px 14px; background: var(--color-surface); }
+  .status-card.ok { border-color: var(--ok-bd); background: var(--ok-bg); }
+  .status-card.err { border-color: var(--sev-crit-bd); background: var(--sev-crit-bg); }
+  .status-name { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .status-line { font-size: 13px; color: var(--color-secondary); margin-top: 5px; }
+  .scan-list { display: grid; gap: 10px; }
+  .scan-item { border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface); padding: 12px 14px; display: flex; gap: 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+  .scan-item.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+  .scan-item .scan-title { font-weight: 600; font-size: 14px; }
+  .scan-item .scan-sub { font-size: 12px; color: var(--color-muted); margin-top: 4px; }
+  .scan-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* findings — dense */
+  .group-head { position: sticky; top: 60px; background: var(--color-background); z-index: 40;
+    font-size: 13px; font-weight: 700; letter-spacing: .05em; padding: 14px 0 8px;
+    display: flex; align-items: center; gap: 8px; }
+  details.finding { border: 1px solid var(--color-border); border-radius: var(--r-md); margin-bottom: 8px;
+    background: var(--color-surface); overflow: hidden; }
+  details.finding summary { list-style: none; cursor: pointer; padding: 11px 14px; min-height: 36px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; transition: background .15s ease; }
+  details.finding summary:hover { background: var(--color-background); }
+  summary::-webkit-details-marker { display: none; }
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill);
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid; }
+  .badge .ico { width: 12px; height: 12px; }
+  .badge.crit { color: var(--sev-crit); background: var(--sev-crit-bg); border-color: var(--sev-crit-bd); }
+  .badge.high { color: var(--sev-high); background: var(--sev-high-bg); border-color: var(--sev-high-bd); }
+  .badge.med  { color: var(--sev-med);  background: var(--sev-med-bg);  border-color: var(--sev-med-bd); }
+  .badge.low  { color: var(--sev-low);  background: var(--sev-low-bg);  border-color: var(--sev-low-bd); }
+  .badge.info { color: var(--sev-info); background: var(--sev-info-bg); border-color: var(--sev-info-bd); }
+  .cat { font-size: 12px; color: var(--color-muted); display: inline-flex; align-items: center; gap: 5px; }
+  .cat .ico { width: 14px; height: 14px; }
+  .ftitle { font-weight: 500; font-size: 14px; }
+  .floc { font-family: var(--font-mono); font-size: 12px; color: var(--color-muted); }
+  .chev { margin-left: auto; color: var(--color-muted); transition: transform .2s ease; }
+  details[open] .chev { transform: rotate(180deg); }
+  .fixable { color: var(--ok); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .fbody { padding: 4px 14px 16px; border-top: 1px solid var(--color-border); }
+  .fbody p { margin: 10px 0; font-size: 14px; }
+  .path-pill { font-family: var(--font-mono); font-size: 12px; background: var(--color-background);
+    border: 1px solid var(--color-border); border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer; color: var(--color-secondary); }
+  .path-pill:hover { background: #EEF2F6; }
+  .cve { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; background: var(--sev-crit-bg);
+    color: var(--sev-crit); border: 1px solid var(--sev-crit-bd); border-radius: var(--r-sm); padding: 2px 8px; margin: 2px 4px 2px 0; }
+  .cve:hover { text-decoration: none; background: #FEE2E2; }
+  pre { background: var(--color-primary); color: #E2E8F0; border-radius: var(--r-md); padding: 12px;
+    overflow-x: auto; font-family: var(--font-mono); font-size: 13px; }
+  code { font-family: var(--font-mono); font-size: .9em; }
+  .fbody > p code { background: var(--color-background); padding: 1px 5px; border-radius: 4px; }
+
+  /* clean / empty */
+  .clean { text-align: center; padding: 40px 24px; color: var(--ok); }
+  .clean .ico { width: 48px; height: 48px; margin-bottom: 12px; }
+
+  /* PR + report */
+  .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .btn-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .pr-item { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+  .report h2 { border-bottom: 1px solid var(--color-border); padding-bottom: 6px; margin: 24px 0 12px; font-size: 20px; color: var(--color-primary); }
+  .report h3 { margin: 18px 0 8px; font-size: 16px; }
+  .report ul, .report ol { padding-left: 22px; }
+  .report li { margin: 4px 0; }
+  .report p { margin: 10px 0; }
+  .report pre { margin: 12px 0; }
+  .report table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  .report th, .report td { border: 1px solid var(--color-border); padding: 6px 10px; text-align: left; }
+  .skeleton { height: 16px; border-radius: 4px; background: linear-gradient(90deg, #EEF2F6 25%, #E2E8F0 50%, #EEF2F6 75%);
+    background-size: 200% 100%; animation: shimmer 1.4s infinite; margin: 10px 0; }
+  .skeleton.w70 { width: 70%; } .skeleton.w90 { width: 90%; } .skeleton.w50 { width: 50%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .err { color: var(--color-destructive); border: 1px solid var(--sev-crit-bd); background: var(--sev-crit-bg);
+    border-radius: var(--r-md); padding: 16px; display: flex; align-items: flex-start; gap: 10px; }
+
+  /* responsive */
+  @media (max-width: 768px) {
+    .hero { padding: 72px 20px 56px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .row { flex-direction: column; }
+    .row .model { flex: 1; }
+    .group-head { top: 56px; }
+    details.finding summary { flex-direction: row; }
+    .floc { flex-basis: 100%; }
+  }
+
+  /* motion off */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- icon sprite (Lucide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-pr" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="18" r="3"/><path d="M18 11.5V15"/><path d="M13 6h3a2 2 0 0 1 2 2v3"/><path d="m15 9-2-3 2-3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 1.5 5 1.5 5 1.5c-.28 1.15-.28 2.35 0 3.5a5.4 5.4 0 0 0-1 3.5c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/></symbol>
+</svg>
+
+<nav><div class="wrap">
+  <span class="brand"><svg class="ico"><use href="#i-shield"/></svg> CoSentinel</span>
+  <span class="nav-right">
+    <span class="nav-badge hidden" id="navBadge"></span>
+    <a class="nav-link" href="https://github.com" target="_blank"><svg class="ico ico-sm"><use href="#i-github"/></svg> GitHub</a>
+    <a class="nav-cta" href="#scanCard">Scan a Repo</a>
+  </span>
+</div></nav>
+
+<div class="hero">
+  <span class="pill"><span class="live" id="liveDot"></span><span id="liveText">AI-Powered Security · Open Source</span></span>
+  <h1>Secure Your Code<br>Before It Ships</h1>
+  <p class="subtitle">CoSentinel scans your GitHub repository for vulnerabilities, exposed secrets, and misconfigurations — then shows you exactly how to fix them.</p>
+  <div class="hero-actions">
+    <a class="btn btn-accent btn-sm" href="#scanCard">Scan a Repository</a>
+    <a class="btn btn-ghost btn-sm" href="https://github.com" target="_blank">View on GitHub</a>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="card scan-card" id="scanCard">
+    <div class="field">
+      <label class="field-label" for="repoUrl">GitHub Repository URL</label>
+      <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
+      <div class="helper" id="urlHelper">Public or private. Paste the full repository URL.</div>
+    </div>
+    <div class="row">
+      <div class="grow">
+        <label class="field-label" for="token">GitHub Token</label>
+        <input id="token" type="password" placeholder="ghp_…" autocomplete="off">
+        <div class="helper">Only needed for private repositories.</div>
+      </div>
+      <div class="model">
+        <label class="field-label" for="model">AI Model</label>
+        <select id="model"><option>loading…</option></select>
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="auth">
+      <label for="auth">I confirm this repository is authorized for security testing.</label>
+    </div>
+    <button class="btn" id="scanBtn" disabled>
+      <svg class="ico ico-sm"><use href="#i-shield"/></svg> Start Security Scan
+    </button>
+  </div>
+
+  <section class="block hidden" id="progress">
+    <div class="card">
+      <div class="progress-head">
+        <h3>Scanning repository…</h3>
+        <span class="progress-meta"><span id="stepCounter">Step 1 of 7</span> · <span id="timer">0.0s</span></span>
+      </div>
+      <ul class="steps" id="steps">
+        <li data-step="1"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Fetching repository</span></li>
+        <li data-step="2"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scanning dependencies (OSV.dev)</span></li>
+        <li data-step="3"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Detecting secrets</span></li>
+        <li data-step="4"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Auditing source code</span></li>
+        <li data-step="5"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Auditing configuration files</span></li>
+        <li data-step="6"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">Scanning git history</span></li>
+        <li data-step="7"><span class="marker"><span class="dot"></span><svg class="ico spin"><use href="#i-loader"/></svg><svg class="ico check"><use href="#i-check"/></svg></span><span class="lbl">AI Analysis (Regolo)</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <div id="errBox"></div>
+
+  <section class="block hidden" id="results">
+    <div class="risk-card">
+      <div class="risk-score" id="riskScore">—</div>
+      <div class="risk-info">
+        <div class="risk-label" id="riskLabel"></div>
+        <div class="risk-sub" id="meta"></div>
+      </div>
+    </div>
+    <div class="scan-meta" id="scanMeta"></div>
+    <div class="status-grid" id="scannerStatus"></div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="block hidden" id="historySection">
+    <div class="card">
+      <div class="card-title"><svg class="ico"><use href="#i-info"/></svg> Scan History</div>
+      <div class="scan-list" id="scanHistory"></div>
+    </div>
+  </section>
+
+  <section class="block hidden" id="findings"></section>
+
+  <section class="block hidden" id="prSection">
+    <div class="card">
+      <div class="card-title"><svg class="ico"><use href="#i-pr"/></svg> Auto-Fix Available</div>
+      <div id="prList"></div>
+      <button class="btn btn-sm" id="prBtn"><svg class="ico ico-sm"><use href="#i-pr"/></svg> Create Fix PR on GitHub</button>
+      <div id="prResult" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section class="block hidden" id="reportSection">
+    <div class="card">
+      <div class="card-title"><svg class="ico"><use href="#i-shield"/></svg> Full AI Security Report</div>
+      <div class="report" id="report"></div>
+      <div class="btn-row">
+        <button class="btn btn-sm" id="dlBtn"><svg class="ico ico-sm"><use href="#i-download"/></svg> Download .md</button>
+        <button class="btn btn-sm btn-ghost" id="copyBtn"><svg class="ico ico-sm"><use href="#i-copy"/></svg> Copy Report</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const TOTAL_STEPS = 7;
+const SEV_CLASS = { CRITICAL: 'crit', HIGH: 'high', MEDIUM: 'med', LOW: 'low', INFO: 'info' };
+const SEV_ICON  = { CRITICAL: 'i-alert', HIGH: 'i-alert', MEDIUM: 'i-alert', LOW: 'i-info', INFO: 'i-info' };
+const CAT_ICON  = { dependency: 'i-package', secret: 'i-key', code: 'i-code', config: 'i-settings' };
+
+let lastReport = '', lastFindings = [], activeFilter = null, timerId = null, lastScanId = '', lastRepoUrl = '';
+
+function esc(s) { return (s||'').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+function icon(id, cls) { return `<svg class="ico ${cls||''}"><use href="#${id}"/></svg>`; }
+
+// --- live status (health + models) ---
+fetch('/api/health').then(r => r.json()).then(d => {
+  if (d.status === 'ok') $('liveText').textContent = `Scanner online · ${d.model}`;
+}).catch(() => { $('liveDot').style.background = 'var(--sev-med)'; $('liveText').textContent = 'Scanner offline'; });
+
+fetch('/api/models').then(r => r.json()).then(d => {
+  if (d.models && d.models.length) $('model').innerHTML = d.models.map(m => `<option>${esc(m)}</option>`).join('');
+}).catch(() => { $('model').innerHTML = '<option>default</option>'; });
+
+// --- form ---
+$('auth').addEventListener('change', e => { $('scanBtn').disabled = !e.target.checked; });
+
+$('repoUrl').addEventListener('blur', () => {
+  const v = $('repoUrl').value.trim();
+  const ok = !v || /github\.com\//.test(v);
+  $('repoUrl').classList.toggle('invalid', !ok);
+  $('urlHelper').textContent = ok ? 'Public or private. Paste the full repository URL.' : 'Enter a valid github.com repository URL.';
+  $('urlHelper').style.color = ok ? '' : 'var(--color-destructive)';
+});
+
+// --- progress ---
+function setStep(i, state) { const li = document.querySelector(`.steps li[data-step="${i}"]`); if (li) li.className = state; }
+function updateProgressStep(step, label) {
+  for (let i = 1; i < step; i++) setStep(i, 'done');
+  setStep(step, 'active');
+  const lbl = document.querySelector(`.steps li[data-step="${step}"] .lbl`);
+  if (lbl && label) lbl.textContent = label;
+  $('stepCounter').textContent = `Step ${step} of ${TOTAL_STEPS}`;
+}
+function startTimer() {
+  const t0 = performance.now();
+  timerId = setInterval(() => { $('timer').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's'; }, 100);
+}
+function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
+
+// AI report takes the longest — show a shimmer placeholder while step 7 runs.
+function showReportSkeleton() {
+  $('report').innerHTML = '<div class="skeleton w50"></div><div class="skeleton w90"></div><div class="skeleton"></div><div class="skeleton w70"></div><div class="skeleton w90"></div>';
+  $('reportSection').classList.remove('hidden');
+}
+
+function showError(msg) {
+  stopTimer();
+  $('progress').classList.add('hidden');
+  $('scanCard').classList.remove('hidden');
+  $('errBox').innerHTML = `<div class="err">${icon('i-alert')}<div><strong>Scan failed.</strong><br>${esc(msg)}</div></div>`;
+}
+
+$('scanBtn').addEventListener('click', () => {
+  const repoUrl = $('repoUrl').value.trim();
+  if (!repoUrl) { $('repoUrl').focus(); return; }
+  lastRepoUrl = repoUrl;
+  const token = $('token').value.trim();
+  const model = $('model').value;
+
+  $('scanCard').classList.add('hidden');
+  $('errBox').innerHTML = '';
+  $('results').classList.add('hidden');
+  $('findings').classList.add('hidden');
+  $('prSection').classList.add('hidden');
+  $('reportSection').classList.add('hidden');
+  $('progress').classList.remove('hidden');
+  for (let i = 1; i <= TOTAL_STEPS; i++) setStep(i, '');
+  startTimer();
+
+  const params = new URLSearchParams({ repo_url: repoUrl });
+  if (token) params.set('github_token', token);
+  if (model) params.set('model', model);
+
+  const es = new EventSource(`/api/scan/stream?${params}`);
+  es.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'progress') {
+      updateProgressStep(data.step, data.label);
+      if (data.step === 7) showReportSkeleton();
+    } else if (data.type === 'result') {
+      es.close(); stopTimer();
+      for (let i = 1; i <= TOTAL_STEPS; i++) setStep(i, 'done');
+      $('progress').classList.add('hidden');
+      render(data);
+    } else if (data.type === 'error') {
+      es.close(); showError(data.message);
+    }
+  };
+  es.onerror = () => { es.close(); showError('Connection lost. Please try again.'); };
+});
+
+// stats keys differ: POST lowercase, SSE uppercase
+function norm(s) {
+  return {
+    critical: s.critical ?? s.CRITICAL ?? 0, high: s.high ?? s.HIGH ?? 0,
+    medium: s.medium ?? s.MEDIUM ?? 0, low: s.low ?? s.LOW ?? 0,
+    total_files: s.total_files ?? 0,
+  };
+}
+function riskScore(s) { return Math.min(10, s.critical*4 + s.high*2 + s.medium*0.5 + s.low*0.1); }
+function riskMeta(score) {
+  if (score >= 8) return { label: 'Critical risk', color: 'var(--sev-crit)' };
+  if (score >= 6) return { label: 'High risk', color: 'var(--sev-high)' };
+  if (score >= 4) return { label: 'Moderate risk', color: 'var(--sev-med)' };
+  if (score > 0)  return { label: 'Low risk', color: 'var(--sev-low)' };
+  return { label: 'No issues found', color: 'var(--ok)' };
+}
+
+async function loadHistory(repoUrl, activeScanId = '') {
+  if (!repoUrl) return;
+  try {
+    const res = await fetch(`/api/scans?repo_url=${encodeURIComponent(repoUrl)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const scans = data.scans || [];
+    $('historySection').classList.remove('hidden');
+    if (!scans.length) {
+      $('scanHistory').innerHTML = '<div class="meta">No previous scans for this repository.</div>';
+      return;
+    }
+    $('scanHistory').innerHTML = scans.map(s => `
+      <div class="scan-item ${s.scan_id === activeScanId ? 'active' : ''}">
+        <div>
+          <div class="scan-title">${esc(s.commit_sha || s.scan_id)}</div>
+          <div class="scan-sub">${s.repo_name || ''} · ${s.findings_count || 0} findings · ${Number(s.duration_sec || 0).toFixed(2)}s</div>
+        </div>
+        <div class="scan-actions">
+          <button class="btn btn-sm btn-ghost" data-scan-open="${esc(s.scan_id)}">Open</button>
+          <button class="btn btn-sm btn-ghost" data-scan-delete="${esc(s.scan_id)}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (_) {}
+}
+
+async function openHistoryScan(scanId) {
+  const res = await fetch(`/api/scans/${encodeURIComponent(scanId)}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  render(data);
+  lastScanId = data.scan_id || scanId;
+  lastRepoUrl = data.repo_url || lastRepoUrl;
+  loadHistory(lastRepoUrl, lastScanId);
+}
+
+function render(data) {
+  lastReport = data.report || '';
+  lastFindings = data.findings || [];
+  activeFilter = null;
+  lastScanId = data.scan_id || lastScanId;
+  lastRepoUrl = data.repo_url || $('repoUrl').value.trim() || lastRepoUrl;
+  const s = norm(data.stats || {});
+
+  const score = riskScore(s), rm = riskMeta(score);
+  $('riskScore').textContent = score.toFixed(1) + ' / 10';
+  $('riskScore').style.color = rm.color;
+  $('riskLabel').textContent = rm.label;
+  $('riskLabel').style.color = rm.color;
+  $('meta').textContent = `${data.repo_name||''} · ${new Date().toLocaleString()} · ${s.total_files} files`;
+  $('scanMeta').innerHTML = [
+    data.scan_id ? `<span class="scan-chip">scan_id: ${esc(data.scan_id)}</span>` : '',
+    data.commit_sha ? `<span class="scan-chip">commit: ${esc(data.commit_sha)}</span>` : '',
+    data.duration_sec != null ? `<span class="scan-chip">duration: ${Number(data.duration_sec).toFixed(2)}s</span>` : '',
+    `<span class="scan-chip">errors: ${esc(String((data.scan_errors || []).length))}</span>`,
+  ].filter(Boolean).join('');
+  renderScannerStatus(data.scanner_status || {});
+  $('historySection').classList.remove('hidden');
+
+  const kpi = (cls, sev, n) => `<button class="kpi ${cls}" data-sev="${sev}"><div class="kpi-count">${n}</div><div class="kpi-label">${sev}</div></button>`;
+  $('kpis').innerHTML = kpi('crit','CRITICAL',s.critical) + kpi('high','HIGH',s.high) + kpi('med','MEDIUM',s.medium) + kpi('low','LOW',s.low);
+  $('results').classList.remove('hidden');
+
+  setNavBadge(s);
+  renderFindings();
+  renderPR(lastFindings);
+  $('report').innerHTML = marked.parse(lastReport);
+  $('reportSection').classList.remove('hidden');
+  loadHistory(lastRepoUrl, lastScanId);
+}
+
+function setNavBadge(s) {
+  const total = lastFindings.length;
+  const color = (s.critical || s.high) ? 'var(--sev-crit)' : s.medium ? 'var(--sev-med)' : 'var(--ok)';
+  $('navBadge').innerHTML = `<span class="nb-dot" style="background:${color}"></span>${total} findings`;
+  $('navBadge').classList.remove('hidden');
+}
+
+// KPI click → filter by severity (toggle)
+$('kpis').addEventListener('click', e => {
+  const card = e.target.closest('.kpi'); if (!card) return;
+  const sev = card.dataset.sev;
+  activeFilter = activeFilter === sev ? null : sev;
+  [...$('kpis').children].forEach(c => c.classList.toggle('active', c.dataset.sev === activeFilter));
+  renderFindings();
+});
+
+function renderFindings() {
+  const order = ['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+  const list = activeFilter ? lastFindings.filter(f => f.severity === activeFilter) : lastFindings;
+  if (!list.length) {
+    $('findings').innerHTML = `<div class="card clean">${icon('i-shield-check','ico-lg')}<div><strong>${activeFilter ? 'No '+activeFilter+' findings' : 'Repository clean'}</strong></div></div>`;
+    $('findings').classList.remove('hidden');
+    return;
+  }
+  let html = '';
+  for (const sev of order) {
+    const group = list.filter(f => f.severity === sev);
+    if (!group.length) continue;
+    html += `<div class="group-head" style="color:var(--sev-${SEV_CLASS[sev]})">${icon(SEV_ICON[sev],'ico-sm')} ${sev} · ${group.length}</div>`;
+    for (const f of group) html += findingCard(f);
+  }
+  $('findings').innerHTML = html;
+  $('findings').classList.remove('hidden');
+}
+
+function renderScannerStatus(status) {
+  const names = ['deps', 'secrets', 'code', 'config', 'git_history'];
+  $('scannerStatus').innerHTML = names.map(name => {
+    const s = status[name] || {};
+    const ok = String(s.status || '').toLowerCase() === 'ok';
+    return `
+      <div class="status-card ${ok ? 'ok' : 'err'}">
+        <div class="status-name">${esc(name)}</div>
+        <div class="status-line">${esc(s.status || 'unknown')} · ${esc(String(s.findings || 0))} findings · ${esc(String((s.errors || []).length))} errors</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderInlineCode(text) {
+  return (text || '').split('`').map((p, i) => i % 2 ? `<code>${esc(p)}</code>` : esc(p)).join('');
+}
+
+function findingCard(f) {
+  const cls = SEV_CLASS[f.severity] || 'info';
+  const loc = f.file_path
+    ? `<span class="floc"><span class="path-pill" data-copy="${esc(f.file_path)}" title="Copy path">${esc(f.file_path)}${f.line_number ? ':'+f.line_number : ''}</span></span>` : '';
+  const cves = (f.cve_ids||[]).map(c =>
+    `<a class="cve" href="https://nvd.nist.gov/vuln/detail/${esc(c)}" target="_blank">${esc(c)}</a>`).join('');
+  const catIco = CAT_ICON[f.category] || 'i-info';
+  return `<details class="finding">
+    <summary>
+      <span class="badge ${cls}">${icon(SEV_ICON[f.severity])}${f.severity}</span>
+      <span class="cat">${icon(catIco)}${esc(f.category)}</span>
+      <span class="ftitle">${esc(f.title)}</span>
+      ${loc}
+      ${f.auto_fixable ? `<span class="fixable">${icon('i-check','ico-sm')}Auto-fixable</span>` : ''}
+      ${icon('i-chevron','chev ico-sm')}
+    </summary>
+    <div class="fbody">
+      <p>${esc(f.description)}</p>
+      <pre><code>${esc(f.evidence)}</code></pre>
+      <p><strong>Fix:</strong> ${renderInlineCode(f.fix_suggestion)}</p>
+      ${cves ? `<p><strong>CVEs:</strong> ${cves}</p>` : ''}
+    </div>
+  </details>`;
+}
+
+// path-pill copy (delegated; don't toggle details)
+$('findings').addEventListener('click', e => {
+  const pill = e.target.closest('.path-pill'); if (!pill) return;
+  e.preventDefault();
+  navigator.clipboard.writeText(pill.dataset.copy);
+  const orig = pill.textContent;
+  pill.textContent = 'Copied!';
+  setTimeout(() => { pill.textContent = orig; }, 1200);
+});
+
+$('historySection').addEventListener('click', async e => {
+  const openBtn = e.target.closest('[data-scan-open]');
+  if (openBtn) {
+    await openHistoryScan(openBtn.dataset.scanOpen);
+    return;
+  }
+  const deleteBtn = e.target.closest('[data-scan-delete]');
+  if (deleteBtn) {
+    await fetch(`/api/scans/${encodeURIComponent(deleteBtn.dataset.scanDelete)}`, { method: 'DELETE' });
+    loadHistory(lastRepoUrl, lastScanId);
+  }
+});
+
+function renderPR(findings) {
+  const fixable = findings.filter(f => f.auto_fixable);
+  if (!fixable.length) { $('prSection').classList.add('hidden'); return; }
+  $('prList').innerHTML = fixable.map(f =>
+    `<label class="pr-item"><input type="checkbox" class="prChk" value="${f.id}" checked> ${esc(f.title)}</label>`).join('');
+  $('prSection').classList.remove('hidden');
+}
+
+$('prBtn').addEventListener('click', async () => {
+  const ids = [...document.querySelectorAll('.prChk:checked')].map(c => c.value);
+  if (!ids.length) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}Select at least one finding.</div>`; return; }
+  const github_token = $('token').value.trim();
+  if (!github_token) { $('prResult').innerHTML = `<div class="err">${icon('i-alert')}GitHub token required to create a PR.</div>`; return; }
+  $('prResult').textContent = 'Creating PR…';
+  try {
+    const res = await fetch('/api/create-pr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_url: $('repoUrl').value.trim(), github_token, finding_ids: ids }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'PR failed');
+    const d = await res.json();
+    $('prResult').innerHTML = `${icon('i-check','ico-sm')} <a href="${esc(d.pr_url)}" target="_blank">${esc(d.pr_url)} ${icon('i-external','ico-sm')}</a>`;
+  } catch (err) {
+    $('prResult').innerHTML = `<div class="err">${icon('i-alert')}${esc(err.message)}</div>`;
+  }
+});
+
+$('dlBtn').addEventListener('click', () => {
+  const blob = new Blob([lastReport], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cosentinel-report.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+$('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(lastReport);
+  const btn = $('copyBtn');
+  const html = btn.innerHTML;
+  btn.innerHTML = `${icon('i-check','ico-sm')} Copied!`;
+  setTimeout(() => { btn.innerHTML = html; }, 2000);
+});
+</script>
+</body>
+</html>

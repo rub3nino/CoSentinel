@@ -5,7 +5,7 @@ load_dotenv()
 
 REGOLO_API_KEY = os.getenv("REGOLO_API_KEY", "")
 REGOLO_BASE_URL = os.getenv("REGOLO_BASE_URL", "https://api.regolo.ai/v1")
-REGOLO_MODEL = os.getenv("REGOLO_MODEL", "gpt-4o")
+REGOLO_MODEL = os.getenv("REGOLO_MODEL", "gpt-oss-120b")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
