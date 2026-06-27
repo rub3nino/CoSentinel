@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+/tmp/cosentinel_repos/
+.DS_Store
+
+# Third-party tooling (separate repos, not part of CoSentinel)
+graphify/
+ponytail/
