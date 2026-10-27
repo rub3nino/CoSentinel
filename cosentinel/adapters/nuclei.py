@@ -21,7 +21,7 @@ class NucleiAdapter(Adapter):
     name = "nuclei"
     requires_tool = "nuclei"
     runs_on = "scanner"
-    max_intensity = Intensity.SAFE
+    max_intensity = Intensity.AGGRESSIVE
 
     def plan(self, target: Target, intensity: Intensity) -> list[PlannedCommand]:
         argv = [
@@ -32,7 +32,15 @@ class NucleiAdapter(Adapter):
             "-nc",             # no color
             "-severity", "info,low,medium,high,critical",
         ]
-        return [PlannedCommand(argv=argv, timeout=1800, label="nuclei scan")]
+        label = "nuclei scan"
+        if intensity >= Intensity.AGGRESSIVE:
+            # DAST / fuzzing: actively inject payloads (SQLi, XSS, SSTI, command
+            # injection, …) into the target's parameters, the way a human tester
+            # would. Gated by the scope layer (--confirm). Output stays JSONL, so
+            # the parser below is unchanged.
+            argv += ["-dast"]
+            label = "nuclei DAST (fuzzing) scan"
+        return [PlannedCommand(argv=argv, timeout=1800, label=label)]
 
     def parse(
         self, results: list[CommandResult], target: Target, intensity: Intensity

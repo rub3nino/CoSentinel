@@ -24,6 +24,15 @@ def _result(stdout="", stderr="", rc=0):
 TARGET = Target("srv", "10.0.0.5", url="http://10.0.0.5")
 
 
+# -- nuclei intensity -----------------------------------------------------
+def test_nuclei_enables_dast_only_when_aggressive():
+    a = NucleiAdapter()
+    safe = a.plan(TARGET, Intensity.SAFE)[0].argv
+    assert "-dast" not in safe
+    aggressive = a.plan(TARGET, Intensity.AGGRESSIVE)[0].argv
+    assert "-dast" in aggressive
+
+
 # -- nmap -----------------------------------------------------------------
 NMAP_XML = """<?xml version="1.0"?>
 <nmaprun>
