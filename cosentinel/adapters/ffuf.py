@@ -55,6 +55,11 @@ class FfufAdapter(Adapter):
             PlannedCommand(
                 argv=["ffuf", "-u", url, "-w", wl,
                       "-mc", "200,204,301,302,307,401,403,405",
+                      # Auto-calibration: ffuf learns what a "not found" looks
+                      # like and filters responses matching it. Essential against
+                      # SPAs / catch-all servers that answer 200 for every path
+                      # (otherwise every wordlist entry is a false positive).
+                      "-ac",
                       "-of", "json", "-o", _REPORT, "-s"],
                 timeout=1800, label="ffuf content discovery",
             ),

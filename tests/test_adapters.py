@@ -175,6 +175,12 @@ def test_ffuf_is_aggressive_only():
     assert FfufAdapter().effective_intensity(Intensity.SAFE) is None
 
 
+def test_ffuf_enables_auto_calibration():
+    # -ac filters catch-all 200s (SPAs), so discovery isn't all false positives.
+    argv = FfufAdapter().plan(TARGET, Intensity.AGGRESSIVE)[1].argv
+    assert "-ac" in argv
+
+
 def test_ffuf_flags_sensitive_paths_higher():
     out = FfufAdapter().parse([_result(""), _result(""), _result(FFUF_JSON)],
                               TARGET, Intensity.AGGRESSIVE)
