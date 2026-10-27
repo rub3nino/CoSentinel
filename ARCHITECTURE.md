@@ -137,8 +137,9 @@ ever needs to be multi-user and always-on.
 
 - **v1 (done):** adapter engine + scope/audit + Lynis + Nmap + Nuclei + SQLite +
   CLI + static report.
-- **v2 (in progress):** more detection adapters — testssl.sh ✓, Nikto ✓, then
-  OpenVAS/Greenbone, ZAP; scheduling.
+- **v2 (in progress):** more detection adapters — testssl.sh ✓, Nikto ✓,
+  OpenVAS/Greenbone ✓ (report parser tested; live GMP lifecycle needs a running
+  GVM to validate), web-only targets ✓; then ZAP; scheduling.
 - **v3:** correlation/prioritization across adapters ✓ (`core/correlate.py`,
   `cosentinel risks`); next: the marketing website; optional local-AI
   remediation summaries.

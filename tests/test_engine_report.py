@@ -31,6 +31,19 @@ def test_engine_dry_run_plans_but_does_not_execute(tmp_path):
     assert lynis_run.planned[0].sudo is True
 
 
+def test_web_only_target_skips_inside_adapters(tmp_path):
+    scope = Scope([Target("mysite", "example.com", ssh=False, url="https://example.com")],
+                  audit=AuditLog(tmp_path / "audit.jsonl"))
+    engine = Engine(scope, Store(tmp_path / "db.sqlite"))
+    [ts] = engine.run(["mysite"], get_profile("full"), dry_run=True)
+
+    planned = {r.adapter for r in ts.runs if r.planned}
+    # Lynis (inside-host) is skipped; only outside-in scanners are planned.
+    assert planned == {"nmap", "nuclei", "testssl", "nikto"}
+    lynis_run = next(r for r in ts.runs if r.adapter == "lynis")
+    assert lynis_run.skipped and "web-only" in lynis_run.skipped
+
+
 def test_report_renders_findings(tmp_path):
     group = {
         "target": "srv", "profile": "full", "intensity": "Safe",

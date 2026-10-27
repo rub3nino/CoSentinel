@@ -13,5 +13,6 @@ from . import nmap as _nmap    # noqa: F401
 from . import nuclei as _nuclei  # noqa: F401
 from . import testssl as _testssl  # noqa: F401
 from . import nikto as _nikto  # noqa: F401
+from . import openvas as _openvas  # noqa: F401
 
 __all__ = ["Adapter", "PlannedCommand", "all_adapters", "get_adapter", "register"]

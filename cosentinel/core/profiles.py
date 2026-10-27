@@ -90,6 +90,12 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         intensity=Intensity.SAFE,
         adapters=("lynis", "nmap", "nuclei", "testssl", "nikto"),
     ),
+    "openvas": Profile(
+        name="openvas",
+        description="Deep vulnerability scan via a running Greenbone/GVM instance (gvm-cli).",
+        intensity=Intensity.SAFE,
+        adapters=("openvas",),
+    ),
 }
 
 

@@ -9,6 +9,7 @@ from cosentinel.adapters.lynis import LynisAdapter
 from cosentinel.adapters.nikto import NiktoAdapter
 from cosentinel.adapters.nmap import NmapAdapter
 from cosentinel.adapters.nuclei import NucleiAdapter
+from cosentinel.adapters.openvas import OpenvasAdapter
 from cosentinel.adapters.testssl import TestsslAdapter
 from cosentinel.core.findings import Category, Severity
 from cosentinel.core.profiles import Intensity
@@ -217,3 +218,47 @@ def test_nikto_no_json_is_reported_not_crashed():
     findings = NiktoAdapter().parse([_result("", stderr="host down"), _result("")],
                                     TARGET, Intensity.SAFE)
     assert findings and findings[0].severity is Severity.INFO
+
+
+# -- openvas (GMP report XML parsing) -------------------------------------
+OPENVAS_XML = """<get_reports_response status="200">
+ <report><report><results>
+  <result>
+    <name>OpenSSL Infinite Loop DoS</name>
+    <host>10.0.0.5</host>
+    <port>443/tcp</port>
+    <threat>High</threat>
+    <severity>7.5</severity>
+    <description>Vulnerable OpenSSL version detected.</description>
+    <nvt oid="1.3.6.1.4.1.25623.1.0.1">
+      <name>OpenSSL DoS</name>
+      <cve>CVE-2022-0778</cve>
+      <tags>summary=BN_mod_sqrt loop|solution=Upgrade OpenSSL|qod_type=remote</tags>
+    </nvt>
+  </result>
+  <result>
+    <name>TCP timestamps</name>
+    <host>10.0.0.5</host><port>general/tcp</port>
+    <threat>Log</threat><severity>0.0</severity>
+    <nvt oid="1.2.3"><name>TCP timestamps</name><cve>NOCVE</cve></nvt>
+  </result>
+ </results></report></report>
+</get_reports_response>"""
+
+
+def test_openvas_parses_report():
+    fs = OpenvasAdapter().parse([_result(OPENVAS_XML)], TARGET, Intensity.SAFE)
+    high = [f for f in fs if f.severity is Severity.HIGH][0]
+    assert high.category == Category.VULNERABILITY
+    assert "CVE-2022-0778" in high.references
+    assert "Upgrade OpenSSL" in high.remediation
+    assert high.resource == "10.0.0.5 443/tcp"
+    log = [f for f in fs if f.severity is Severity.INFO][0]
+    assert log.references == []            # NOCVE is filtered out
+
+
+def test_openvas_empty_report_is_reported():
+    fs = OpenvasAdapter().parse([_result("<get_reports_response/>")], TARGET, Intensity.SAFE)
+    assert fs and fs[0].severity is Severity.INFO
+    fs2 = OpenvasAdapter().parse([_result("")], TARGET, Intensity.SAFE)
+    assert fs2 and "empty report" in fs2[0].title

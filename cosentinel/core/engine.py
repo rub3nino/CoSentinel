@@ -90,7 +90,23 @@ class Engine:
             for name in profile.adapters:
                 adapter = get_adapter(name)
                 runner = target_runner if adapter.runs_on == "target" else scanner_runner
-                run = AdapterRun(adapter=name, runner=runner.describe())
+                run = AdapterRun(adapter=name, runner=runner.describe() if runner else "n/a")
+
+                # A host-internal adapter can't run against a web-only target.
+                if adapter.runs_on == "target" and runner is None:
+                    run.skipped = f"{target_id} is web-only (no SSH/local access)"
+                    self.log(f"  [{name}] skipped — {run.skipped}")
+                    if not dry_run and scan_id is not None:
+                        f = Finding(
+                            source=name, target=target_id, severity=Severity.INFO,
+                            category=Category.INFO,
+                            title=f"{name} skipped: {target_id} is web-only (no SSH/local access)",
+                            remediation="Set ssh:true (with access) to enable host-internal audits.",
+                        )
+                        run.findings = [f]
+                        self.store.add_finding(scan_id, f)
+                    ts.runs.append(run)
+                    continue
 
                 if not adapter.supports(profile.intensity):
                     run.skipped = f"adapter caps at {adapter.max_intensity.label}"
@@ -132,7 +148,9 @@ class Engine:
         return ts
 
     @staticmethod
-    def _target_runner(target: Target) -> Runner:
+    def _target_runner(target: Target) -> Runner | None:
         if target.is_local:
             return LocalRunner()
-        return SSHRunner(target.host, user=target.user, port=target.port)
+        if target.ssh:
+            return SSHRunner(target.host, user=target.user, port=target.port)
+        return None  # web-only target: there is no "inside" to run on

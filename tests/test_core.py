@@ -25,6 +25,18 @@ def test_fingerprint_is_stable_and_ignores_timestamps():
     assert a.fingerprint != c.fingerprint
 
 
+def test_target_kinds_local_ssh_web():
+    local = Target("l", "127.0.0.1", ssh=False)
+    assert local.is_local and local.can_scan_inside
+    remote = Target("s", "srv", ssh=True)
+    assert not remote.is_local and remote.can_scan_inside
+    web = Target("w", "example.com", ssh=False)
+    assert not web.is_local and not web.can_scan_inside       # web-only
+    assert web.web_target == "example.com"
+    web2 = Target("w2", "example.com", ssh=False, url="https://example.com")
+    assert web2.web_target == "https://example.com"
+
+
 def test_scope_rejects_unknown_target(tmp_path):
     scope = Scope([Target("a", "1.2.3.4")], audit=AuditLog(tmp_path / "audit.jsonl"))
     with pytest.raises(AuthorizationError):

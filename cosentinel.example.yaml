@@ -24,3 +24,13 @@ targets:
   #   url: http://homeserver        # optional, for web/vuln scanners
   #   tags: [prod]
   #   lab: false
+
+  # A website / web address you own or are authorized to test. ssh:false + a
+  # non-local host => "web-only": only outside-in scanners run (nmap, nuclei,
+  # testssl, nikto); Lynis is skipped. Only add sites you may scan.
+  # - id: mysite
+  #   host: example.com
+  #   ssh: false
+  #   url: https://example.com
+  #   tags: [web]
+  #   lab: false

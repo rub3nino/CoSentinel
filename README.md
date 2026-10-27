@@ -18,6 +18,7 @@ orchestrates established security scanners in one place:
 - **Nuclei** — known-vulnerability detection against exposed services.
 - **testssl.sh** — TLS / certificate posture of an exposed service, from *outside*.
 - **Nikto** — web-server misconfigurations and dangerous files, from *outside*.
+- **OpenVAS / Greenbone** — deep vulnerability scan via a running GVM instance (opt-in).
 
 It normalizes everything into a single **finding** model, keeps history in a local
 SQLite file, and can render a static, read-only HTML report. There is **no always-on
@@ -92,6 +93,25 @@ targets:
 | `tls`     | safe      | testssl               | TLS/certificate posture |
 | `web`     | safe      | nikto                 | Web-server misconfigurations |
 | `full`    | safe      | lynis + nmap + nuclei + testssl + nikto | Everything available |
+| `openvas` | safe      | openvas               | Deep GVM scan (needs a running Greenbone) |
+
+### Targets: machines *and* websites
+
+A target can be the local box (`ssh: false`, host `127.0.0.1`), a remote host over
+SSH (`ssh: true` — enables Lynis from inside), or a **website / web address**
+(`ssh: false` + a real host or `url:`). A website is *web-only*: the outside-in
+scanners (nmap, nuclei, testssl, nikto) run against it and Lynis is skipped.
+
+```yaml
+targets:
+  - id: mysite
+    host: example.com
+    ssh: false
+    url: https://example.com
+```
+
+> Only add hosts and sites you own or are explicitly authorized to test. The
+> allowlist is the control, and every action is written to the audit log.
 
 ## Status
 

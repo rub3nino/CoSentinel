@@ -32,8 +32,8 @@ class Target:
     """A machine Cosentinel is allowed to look at."""
 
     id: str
-    host: str                       # ssh alias (from ~/.ssh/config) or IP/hostname
-    ssh: bool = True                # False => this is the local machine
+    host: str                       # ssh alias (from ~/.ssh/config), IP, hostname or domain
+    ssh: bool = True                # True => reach it over SSH; False => local or web-only
     sudo: bool = False              # may we use sudo on the target (for Lynis)
     user: str | None = None         # optional ssh user override
     port: int | None = None         # optional ssh port override
@@ -44,11 +44,20 @@ class Target:
 
     @property
     def is_local(self) -> bool:
-        return not self.ssh or self.host in ("localhost", "127.0.0.1", "::1")
+        """This very machine (no network hop)."""
+        return self.host in ("localhost", "127.0.0.1", "::1")
+
+    @property
+    def can_scan_inside(self) -> bool:
+        """Can we execute commands *inside* this target (for host-audit adapters
+        like Lynis)? Only when it's the local box or reachable over SSH. A plain
+        website/URL target (ssh:false, remote host) is web-only: outside-in
+        scanners run against it, inside-the-host audits are skipped."""
+        return self.is_local or self.ssh
 
     @property
     def web_target(self) -> str:
-        """Best-effort URL for web/vuln scanners."""
+        """Best-effort URL/host for outside-in (web/vuln/TLS) scanners."""
         if self.url:
             return self.url
         return self.host
