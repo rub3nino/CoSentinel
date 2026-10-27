@@ -65,6 +65,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _access(tg) -> str:
+    """How Cosentinel reaches a target: the local box, over SSH, or web-only."""
+    return "local" if tg.is_local else "ssh" if tg.ssh else "web"
+
+
 def cmd_targets(args: argparse.Namespace) -> int:
     cfg = load(args.config)
     if _console:
@@ -73,14 +78,14 @@ def cmd_targets(args: argparse.Namespace) -> int:
             t.add_column(col)
         for tg in cfg.targets:
             t.add_row(
-                tg.id, tg.host, "local" if tg.is_local else "ssh",
+                tg.id, tg.host, _access(tg),
                 "yes" if tg.sudo else "no", "yes" if tg.lab else "no",
                 ",".join(tg.tags),
             )
         _console.print(t)
     else:
         for tg in cfg.targets:
-            print(f"{tg.id}\t{tg.host}\t{'local' if tg.is_local else 'ssh'}")
+            print(f"{tg.id}\t{tg.host}\t{_access(tg)}")
     return 0
 
 
