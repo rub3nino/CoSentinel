@@ -103,16 +103,16 @@ BUILTIN_PROFILES: dict[str, Profile] = {
     "pentest": Profile(
         name="pentest",
         description="Active testing like a human attacker: aggressive Nmap + "
-                    "heavy web probing. Needs --confirm.",
+                    "heavy web probing + SQL-injection detection. Needs --confirm.",
         intensity=Intensity.AGGRESSIVE,
-        adapters=("lynis", "nmap", "nuclei", "testssl", "nikto"),
+        adapters=("lynis", "nmap", "nuclei", "testssl", "nikto", "sqlmap"),
     ),
     "exploit": Profile(
         name="exploit",
         description="Prove impact, not just presence. Each tool goes as far as it "
                     "can. Needs --confirm AND a target marked lab:true.",
         intensity=Intensity.EXPLOIT,
-        adapters=("nmap", "nuclei", "testssl", "nikto"),
+        adapters=("nmap", "nuclei", "testssl", "nikto", "sqlmap"),
     ),
 }
 

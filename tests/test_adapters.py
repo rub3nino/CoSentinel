@@ -10,6 +10,7 @@ from cosentinel.adapters.nikto import NiktoAdapter
 from cosentinel.adapters.nmap import NmapAdapter
 from cosentinel.adapters.nuclei import NucleiAdapter
 from cosentinel.adapters.openvas import OpenvasAdapter
+from cosentinel.adapters.sqlmap import SqlmapAdapter
 from cosentinel.adapters.testssl import TestsslAdapter
 from cosentinel.core.findings import Category, Severity
 from cosentinel.core.profiles import Intensity
@@ -22,6 +23,80 @@ def _result(stdout="", stderr="", rc=0):
 
 
 TARGET = Target("srv", "10.0.0.5", url="http://10.0.0.5")
+
+
+# -- sqlmap ---------------------------------------------------------------
+SQLMAP_VULN = """
+        ___
+       __H__
+ ___ ___[.]_____ ___ ___  {1.8.2#stable}
+
+[12:00:05] [INFO] GET parameter 'id' appears to be 'AND boolean-based blind' injectable
+sqlmap identified the following injection point(s) with a total of 54 HTTP(s) requests:
+---
+Parameter: id (GET)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause
+    Payload: id=1 AND 1234=1234
+
+    Type: time-based blind
+    Title: MySQL >= 5.0.12 AND time-based blind (query SLEEP)
+    Payload: id=1 AND SLEEP(5)
+---
+[12:00:30] [INFO] the back-end DBMS is MySQL
+web application technology: Apache 2.4.41
+back-end DBMS: MySQL >= 5.0.12
+"""
+
+SQLMAP_EXPLOIT = SQLMAP_VULN + """
+banner: '5.7.38-0ubuntu0.18.04.1'
+current user: 'webapp@localhost'
+current database: 'shop'
+current user is DBA: False
+available databases [3]:
+[*] information_schema
+[*] mysql
+[*] shop
+"""
+
+
+def test_sqlmap_never_runs_in_a_safe_scan():
+    # min_intensity is AGGRESSIVE, so a SAFE ceiling must not run it at all.
+    assert SqlmapAdapter().effective_intensity(Intensity.SAFE) is None
+    assert SqlmapAdapter().effective_intensity(Intensity.EXPLOIT) == Intensity.EXPLOIT
+
+
+def test_sqlmap_detection_reports_injectable_parameter():
+    out = SqlmapAdapter().parse([_result(SQLMAP_VULN)], TARGET, Intensity.AGGRESSIVE)
+    highs = [f for f in out if f.severity is Severity.HIGH]
+    assert len(highs) == 1
+    f = highs[0]
+    assert "id" in f.title and f.category is Category.VULNERABILITY
+    assert "MySQL" in f.description
+    assert "CWE-89" in f.references
+    # Detection-only: no proof-of-impact CRITICAL finding.
+    assert not [x for x in out if x.severity is Severity.CRITICAL]
+
+
+def test_sqlmap_exploit_adds_impact_finding():
+    out = SqlmapAdapter().parse([_result(SQLMAP_EXPLOIT)], TARGET, Intensity.EXPLOIT)
+    crit = [f for f in out if f.severity is Severity.CRITICAL]
+    assert len(crit) == 1
+    assert "shop" in crit[0].description
+    assert crit[0].raw["databases"] == ["information_schema", "mysql", "shop"]
+
+
+def test_sqlmap_not_injectable_and_unreachable():
+    clean = SqlmapAdapter().parse(
+        [_result("[12:00:40] [WARNING] all tested parameters do not appear to be injectable.")],
+        TARGET, Intensity.AGGRESSIVE)
+    assert len(clean) == 1 and clean[0].severity is Severity.INFO
+    assert "no SQL injection" in clean[0].title
+
+    down = SqlmapAdapter().parse(
+        [_result("[critical] unable to connect to the target URL")],
+        TARGET, Intensity.AGGRESSIVE)
+    assert len(down) == 1 and "could not reach" in down[0].title
 
 
 # -- nuclei intensity -----------------------------------------------------
