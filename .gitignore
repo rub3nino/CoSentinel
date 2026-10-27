@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Cosentinel local state (your data stays yours)
+.cosentinel/
+# your real allowlist is personal; commit cosentinel.example.yaml instead
+cosentinel.yaml
+cosentinel-report-*.html
+*.db
+*.jsonl
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

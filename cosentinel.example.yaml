@@ -1,0 +1,26 @@
+# Cosentinel configuration — this file IS your allowlist.
+# A machine not listed here cannot be scanned.
+#
+# Copy to cosentinel.yaml (or run `cosentinel init`) and edit.
+
+settings:
+  db: .cosentinel/cosentinel.db
+  audit_log: .cosentinel/audit.jsonl
+
+targets:
+  # The machine you are on right now (no SSH). Good for a first run.
+  - id: localhost
+    host: 127.0.0.1
+    ssh: false
+    sudo: true         # Lynis wants root to read system config
+    lab: true          # a box you own outright
+
+  # A remote home server reached over SSH. `host` matches an entry in your
+  # ~/.ssh/config, or is an IP/hostname. Keys & agent are reused automatically.
+  # - id: homeserver
+  #   host: homeserver
+  #   ssh: true
+  #   sudo: true
+  #   url: http://homeserver        # optional, for web/vuln scanners
+  #   tags: [prod]
+  #   lab: false
