@@ -101,6 +101,55 @@ def test_sqlmap_not_injectable_and_unreachable():
     assert len(down) == 1 and "could not reach" in down[0].title
 
 
+def test_sqlmap_crawl_link_failure_is_not_target_unreachable():
+    # The scan-#12 trap: sqlmap DID reach and test the target, but a secondary
+    # crawled link failed to connect (a [WARNING], not [critical]). That must
+    # read as "reached, clean" — never as "could not reach the target", which
+    # would hide the fact that a real test ran.
+    out = (
+        "[21:41:32] [INFO] starting crawler for target URL 'http://10.0.0.5'\n"
+        "[21:41:33] [INFO] heuristics detected web page charset 'utf-8'\n"
+        "[21:42:10] [WARNING] unable to connect to the target URL ('https://cdn/asset.js')\n"
+        "[21:45:00] [WARNING] all tested parameters do not appear to be injectable.\n"
+    )
+    res = SqlmapAdapter().parse([_result(out)], TARGET, Intensity.AGGRESSIVE)
+    assert len(res) == 1 and res[0].severity is Severity.INFO
+    assert "no SQL injection" in res[0].title
+    assert "could not reach" not in res[0].title
+    # And the stdout tail is kept for debugging (old findings stored {}).
+    assert res[0].raw.get("stdout_tail")
+
+
+def test_sqlmap_no_forms_is_its_own_outcome():
+    res = SqlmapAdapter().parse(
+        [_result("[INFO] there were no forms found at the given target URL")],
+        TARGET, Intensity.AGGRESSIVE)
+    assert len(res) == 1 and res[0].severity is Severity.INFO
+    assert "no testable parameters or forms" in res[0].title
+
+
+def test_sqlmap_handles_laravel_csrf_token_by_default():
+    # Without this, --batch answers the "update anti-CSRF token?" prompt with
+    # the default No, so a Laravel login form is tested with a stale _token and
+    # every request is rejected (false negative).
+    argv = SqlmapAdapter().plan(TARGET, Intensity.AGGRESSIVE)[0].argv
+    assert "--csrf-token=_token" in argv
+    assert "--forms" in argv
+
+
+def test_sqlmap_csrf_token_is_configurable(monkeypatch):
+    monkeypatch.setenv("COSENTINEL_SQLMAP_CSRF_TOKEN", "authenticity_token")
+    monkeypatch.setenv("COSENTINEL_SQLMAP_CSRF_URL", "http://10.0.0.5/login")
+    argv = SqlmapAdapter().plan(TARGET, Intensity.AGGRESSIVE)[0].argv
+    assert "--csrf-token=authenticity_token" in argv
+    assert "--csrf-url=http://10.0.0.5/login" in argv
+
+    # Empty value disables it entirely (stays a generic query-param scanner).
+    monkeypatch.setenv("COSENTINEL_SQLMAP_CSRF_TOKEN", "")
+    argv = SqlmapAdapter().plan(TARGET, Intensity.AGGRESSIVE)[0].argv
+    assert not any(a.startswith("--csrf-token") for a in argv)
+
+
 # -- zap ------------------------------------------------------------------
 ZAP_JSON = """{
   "site": [{

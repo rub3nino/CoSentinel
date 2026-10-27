@@ -11,12 +11,32 @@ scale, so its window starts at AGGRESSIVE: it never fires in a SAFE scan.
     not dump table contents; proving reachability of the data is the point, not
     exfiltrating it.
 
+**Anti-CSRF forms (Laravel, Rails, …).** Many login forms carry a hidden,
+per-request token (`_token` in Laravel) and reject any POST without a fresh
+one, so a naive `--forms` run never actually tests the form. We tell sqlmap the
+token field name (``--csrf-token``) so it re-reads a fresh token before each
+attack request; the name defaults to Laravel's ``_token`` and is overridable
+(``COSENTINEL_SQLMAP_CSRF_TOKEN`` — set it empty to disable). If the token must
+be fetched from a different page than the one under test, point
+``COSENTINEL_SQLMAP_CSRF_URL`` at it.
+
 sqlmap has no stable machine-readable report, so we parse its (deterministic,
 with --flush-session) stdout. The parser is unit-tested against real output.
+
+**Why the outcome classification is careful.** sqlmap says many different
+things, and they are not all equal. "reached the target and found it clean" is
+a very different result from "never reached the target at all" — reporting the
+first as the second hides a *missing* test behind a reassuring-looking INFO.
+And with ``--crawl`` a *secondary* link can fail to connect (logged at
+``[WARNING]``) while the primary target was reached and fully tested — that must
+not be mistaken for the whole target being down. So we only call it unreachable
+on a ``[critical]`` connection failure *and* no evidence the target was ever
+fetched.
 """
 
 from __future__ import annotations
 
+import os
 import re
 
 from ..core.findings import Category, Finding, Severity
@@ -29,14 +49,44 @@ from .base import Adapter, PlannedCommand, register
 _PARAM_RE = re.compile(r"^Parameter:\s*(?P<name>.+?)\s*\((?P<method>[^)]+)\)\s*$", re.M)
 _TITLE_RE = re.compile(r"^\s*Title:\s*(?P<title>.+?)\s*$", re.M)
 _DBMS_RE = re.compile(r"back-end DBMS:\s*(?P<dbms>.+?)\s*$", re.M)
+
+# Reached + tested, nothing injectable.
 _NOT_VULN = (
     "all tested parameters do not appear to be injectable",
     "does not seem to be injectable",
 )
-_UNREACHABLE = (
-    "unable to connect to the target url",
-    "unable to connect to the target",
-    "connection timed out to the target url",
+# Reached, but there was nothing to test (no form / no parameter / no links).
+_NO_TESTABLE = (
+    "there were no forms found at the given target url",
+    "no parameter(s) found for testing",
+    "no usable links found",
+    "all testable parameters you provided are not present within the given request data",
+)
+# A *fatal* connection failure to the primary target: sqlmap logs these at
+# [critical] and aborts. A mid-crawl "[WARNING] unable to connect" to a
+# secondary link is deliberately NOT in here — see the module docstring.
+_FATAL_UNREACH = re.compile(
+    r"\[critical\][^\n]*(?:"
+    r"unable to connect to the target url"
+    r"|connection timed out to the target url"
+    r"|unable to connect to the target url or proxy)",
+    re.I,
+)
+# Any line that proves sqlmap actually fetched the target at least once. If we
+# see one of these, a later connection error was to a crawled/secondary URL,
+# not the target itself.
+_REACHED_SIGNALS = (
+    "detected web page charset",
+    "starting crawler for target url",
+    "got a 301 redirect",
+    "got a 302 redirect",
+    "got a 303 redirect",
+    "got a 307 redirect",
+    "target url content is stable",
+    "web application technology",
+    "back-end dbms",
+    "found a hidden csrf token",
+    "csrf token parameter",
 )
 # EXPLOIT-tier proof-of-impact lines we surface verbatim.
 _IMPACT_RE = {
@@ -45,6 +95,10 @@ _IMPACT_RE = {
     "current database": re.compile(r"^current database:\s*'(?P<v>.+?)'\s*$", re.M),
     "current user is DBA": re.compile(r"^current user is DBA:\s*(?P<v>\w+)\s*$", re.M),
 }
+
+_CSRF_TOKEN_ENV = "COSENTINEL_SQLMAP_CSRF_TOKEN"
+_CSRF_URL_ENV = "COSENTINEL_SQLMAP_CSRF_URL"
+_CSRF_TOKEN_DEFAULT = "_token"   # Laravel; set the env to "" to disable
 
 
 @register
@@ -65,8 +119,17 @@ class SqlmapAdapter(Adapter):
             "--random-agent",
             "--forms",            # also test HTML forms, not just the URL query
             "--crawl=2",          # discover a couple of levels of links to test
-            "--level=3", "--risk=2",   # deeper payload set than the default
         ]
+        # Re-read a fresh anti-CSRF token before each attack so form apps
+        # (Laravel's `_token`, …) are actually testable instead of silently
+        # rejected. Empty env disables it; a separate token page is optional.
+        csrf_token = os.environ.get(_CSRF_TOKEN_ENV, _CSRF_TOKEN_DEFAULT)
+        if csrf_token:
+            argv.append(f"--csrf-token={csrf_token}")
+            csrf_url = os.environ.get(_CSRF_URL_ENV, "")
+            if csrf_url:
+                argv.append(f"--csrf-url={csrf_url}")
+        argv += ["--level=3", "--risk=2"]   # deeper payload set than the default
         label = "sqlmap injection detection"
         if intensity >= Intensity.EXPLOIT:
             # Prove impact without dumping user data: identify the DBMS and the
@@ -85,17 +148,46 @@ class SqlmapAdapter(Adapter):
 
         if not out.strip():
             msg = (res.stderr.strip() if res else "") or "sqlmap produced no output"
-            return [self._info("sqlmap produced no output", msg, target)]
+            return [self._info("sqlmap produced no output", msg, target, out)]
 
-        if any(s in low for s in _UNREACHABLE):
-            return [self._info("sqlmap could not reach the target", where, target)]
-
+        # 1) Injectable parameters win over everything else.
         params = list(_PARAM_RE.finditer(out))
-        if not params:
-            if any(s in low for s in _NOT_VULN):
-                return [self._info("sqlmap: no SQL injection found", where, target)]
-            return [self._info("sqlmap: no injectable parameters tested", where, target)]
+        if params:
+            return self._vulnerabilities(out, params, target, intensity)
 
+        reached = any(s in low for s in _REACHED_SIGNALS)
+        fatal_unreach = _FATAL_UNREACH.search(out)
+
+        # 2) Genuinely never reached the target: a critical connect failure and
+        #    no sign we ever fetched a page. This is a *missing* test, not a
+        #    clean result — keep it clearly distinct.
+        if fatal_unreach and not reached:
+            line = fatal_unreach.group(0).strip()
+            return [self._info("sqlmap could not reach the target",
+                               f"{where} — {line}", target, out)]
+
+        # 3) Reached and tested, but nothing was injectable.
+        if any(s in low for s in _NOT_VULN):
+            return [self._info("sqlmap: no SQL injection found", where, target, out)]
+
+        # 4) Reached, but there was nothing to test (no form/params/links).
+        if any(s in low for s in _NO_TESTABLE):
+            return [self._info("sqlmap: no testable parameters or forms",
+                               where, target, out)]
+
+        # 5) A connect failure after we had already reached the target: a
+        #    crawled/secondary link was down. The target itself was tested.
+        if fatal_unreach:
+            return [self._info("sqlmap: no SQL injection found",
+                               f"{where} (a crawled link was unreachable)", target, out)]
+
+        # 6) Anything else: sqlmap ran but drew no clear conclusion we recognize.
+        return [self._info("sqlmap: no injectable parameters tested", where, target, out)]
+
+    def _vulnerabilities(
+        self, out: str, params: list[re.Match], target: Target, intensity: Intensity
+    ) -> list[Finding]:
+        where = target.web_target
         dbms_m = _DBMS_RE.search(out)
         dbms = dbms_m.group("dbms").strip() if dbms_m else "unknown DBMS"
 
@@ -152,7 +244,10 @@ class SqlmapAdapter(Adapter):
                 if line.startswith("[*]")]
 
     @staticmethod
-    def _info(title: str, detail: str, target: Target) -> Finding:
+    def _info(title: str, detail: str, target: Target, out: str = "") -> Finding:
+        # Keep a short stdout tail so an unexpected outcome can be diagnosed
+        # without re-running the whole scan (the old INFO findings stored {}).
+        tail = out.strip()[-800:] if out else ""
         return Finding(source="sqlmap", target=target.id, severity=Severity.INFO,
                        category=Category.INFO, title=title, description=detail,
-                       resource=target.web_target)
+                       resource=target.web_target, raw={"stdout_tail": tail} if tail else {})

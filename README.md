@@ -216,6 +216,19 @@ Global: `-c/--config PATH` to point at a specific config, `--version`.
 **ffuf wordlist.** Point `COSENTINEL_WORDLIST` at a wordlist, or install one (SecLists /
 dirb); a small starter list ships in `wordlists/common-web.txt`.
 
+**sqlmap against anti-CSRF login forms (Laravel, Rails, …).** Forms with a per-request
+hidden token reject any POST without a fresh one, so by default sqlmap re-reads the token
+before each request. The token field name defaults to Laravel's `_token`; override it (or
+set it empty to disable) and, if the token lives on a different page, point sqlmap at it:
+
+```bash
+export COSENTINEL_SQLMAP_CSRF_TOKEN=authenticity_token   # e.g. Rails; "" disables
+export COSENTINEL_SQLMAP_CSRF_URL=http://host/login       # optional: where to fetch it
+```
+
+For a form app, point the target's `url:` at the form page (e.g. `…/login`) so the fields
+actually get tested.
+
 **Running ZAP natively (for Tailscale / host-only targets).** ZAP's packaged
 `zap-full-scan.py` ships only in its Docker image, and a container can't reach a Tailscale
 IP. To scan such a target, install ZAP natively and point the adapter at the bundled shim,
