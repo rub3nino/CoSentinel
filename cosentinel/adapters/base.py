@@ -38,11 +38,24 @@ class Adapter(ABC):
     name: str = ""
     requires_tool: str = ""
     runs_on: str = "target"            # "target" | "scanner"
+    # Intensity window. The profile's intensity is the *ceiling the user
+    # authorized*; an adapter runs as hard as it is allowed up to its own
+    # max_intensity, and does not run at all below its min_intensity. This is
+    # what lets one aggressive profile run heavy web tools AND still run the
+    # safe host-audit tools (each clamped to what it can do), while a heavy
+    # tool like sqlmap (min = AGGRESSIVE) simply never fires in a SAFE scan.
+    min_intensity: Intensity = Intensity.PASSIVE
     max_intensity: Intensity = Intensity.SAFE
 
     # -- capability checks ------------------------------------------------
-    def supports(self, intensity: Intensity) -> bool:
-        return intensity <= self.max_intensity
+    def effective_intensity(self, authorized: Intensity) -> Intensity | None:
+        """How hard this adapter actually runs under an authorized ceiling.
+
+        Returns the clamped intensity, or None when the ceiling is below the
+        adapter's floor (meaning: don't run this adapter at this intensity)."""
+        if authorized < self.min_intensity:
+            return None
+        return Intensity(min(int(authorized), int(self.max_intensity)))
 
     def available(self, runner: Runner) -> bool:
         return runner.which(self.requires_tool)

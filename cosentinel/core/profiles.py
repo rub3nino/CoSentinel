@@ -50,9 +50,12 @@ class Profile:
     adapters: tuple[str, ...]
 
 
-# Built-in profiles. v1 ships detection only — the hardest built-in is SAFE.
-# Aggressive/exploit profiles are intentionally *not* shipped; you compose them
-# deliberately, and the scope layer gates them.
+# Built-in profiles. The detection profiles are SAFE and run with no extra
+# ceremony. The active-testing profiles (`pentest`, `exploit`) send real
+# payloads the way a human tester would; they are gated by the scope layer —
+# `pentest` needs an explicit --confirm, `exploit` additionally needs the
+# target marked `lab: true`. Each adapter still clamps itself to its own
+# ceiling, so a profile's intensity is the *most* any tool is allowed to do.
 BUILTIN_PROFILES: dict[str, Profile] = {
     "audit": Profile(
         name="audit",
@@ -95,6 +98,21 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         description="Deep vulnerability scan via a running Greenbone/GVM instance (gvm-cli).",
         intensity=Intensity.SAFE,
         adapters=("openvas",),
+    ),
+    # -- active testing (gated) -------------------------------------------
+    "pentest": Profile(
+        name="pentest",
+        description="Active testing like a human attacker: aggressive Nmap + "
+                    "heavy web probing. Needs --confirm.",
+        intensity=Intensity.AGGRESSIVE,
+        adapters=("lynis", "nmap", "nuclei", "testssl", "nikto"),
+    ),
+    "exploit": Profile(
+        name="exploit",
+        description="Prove impact, not just presence. Each tool goes as far as it "
+                    "can. Needs --confirm AND a target marked lab:true.",
+        intensity=Intensity.EXPLOIT,
+        adapters=("nmap", "nuclei", "testssl", "nikto"),
     ),
 }
 

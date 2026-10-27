@@ -1,9 +1,12 @@
 """Engine dry-run (plans without executing) and the HTML report renderer."""
 
+import pytest
+
+from cosentinel.adapters.nmap import NmapAdapter
 from cosentinel.core.engine import Engine
 from cosentinel.core.findings import Category, Finding, Severity
-from cosentinel.core.profiles import get_profile
-from cosentinel.core.scope import AuditLog, Scope, Target
+from cosentinel.core.profiles import Intensity, get_profile
+from cosentinel.core.scope import AuditLog, AuthorizationError, Scope, Target
 from cosentinel.core.store import Store
 from cosentinel.report import render_report
 
@@ -42,6 +45,43 @@ def test_web_only_target_skips_inside_adapters(tmp_path):
     assert planned == {"nmap", "nuclei", "testssl", "nikto"}
     lynis_run = next(r for r in ts.runs if r.adapter == "lynis")
     assert lynis_run.skipped and "web-only" in lynis_run.skipped
+
+
+def test_effective_intensity_window():
+    a = NmapAdapter()
+    # Clamped down to the adapter's own ceiling, never above it.
+    assert a.effective_intensity(Intensity.EXPLOIT) == Intensity.AGGRESSIVE
+    assert a.effective_intensity(Intensity.SAFE) == Intensity.SAFE
+    # Below the floor, the adapter does not run at all.
+    a.min_intensity = Intensity.AGGRESSIVE
+    assert a.effective_intensity(Intensity.SAFE) is None
+    assert a.effective_intensity(Intensity.AGGRESSIVE) == Intensity.AGGRESSIVE
+
+
+def test_pentest_profile_clamps_each_adapter_to_its_ceiling(tmp_path):
+    scope = Scope([Target("box", "10.0.0.5", ssh=True)],
+                  audit=AuditLog(tmp_path / "audit.jsonl"))
+    engine = Engine(scope, Store(tmp_path / "db.sqlite"))
+    [ts] = engine.run(["box"], get_profile("pentest"), confirmed=True, dry_run=True)
+
+    # Nmap goes aggressive (vuln NSE engaged) under the pentest ceiling…
+    nmap_run = next(r for r in ts.runs if r.adapter == "nmap")
+    assert nmap_run.intensity == Intensity.AGGRESSIVE
+    assert "--script" in nmap_run.planned[0].argv
+
+    # …while a safe-capped adapter still runs, just clamped down to SAFE
+    # (it is NOT skipped the way the old model would have skipped it).
+    nikto_run = next(r for r in ts.runs if r.adapter == "nikto")
+    assert nikto_run.intensity == Intensity.SAFE
+    assert nikto_run.planned and nikto_run.skipped is None
+
+
+def test_pentest_profile_requires_confirm(tmp_path):
+    scope = Scope([Target("box", "10.0.0.5", ssh=True)],
+                  audit=AuditLog(tmp_path / "audit.jsonl"))
+    engine = Engine(scope, Store(tmp_path / "db.sqlite"))
+    with pytest.raises(AuthorizationError):
+        engine.run(["box"], get_profile("pentest"), confirmed=False, dry_run=True)
 
 
 def test_report_renders_findings(tmp_path):

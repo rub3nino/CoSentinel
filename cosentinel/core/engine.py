@@ -30,6 +30,7 @@ class AdapterRun:
     planned: list[PlannedCommand] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
     skipped: str | None = None
+    intensity: Intensity | None = None   # the clamped intensity this adapter ran at
 
 
 @dataclass
@@ -108,13 +109,19 @@ class Engine:
                     ts.runs.append(run)
                     continue
 
-                if not adapter.supports(profile.intensity):
-                    run.skipped = f"adapter caps at {adapter.max_intensity.label}"
+                # Clamp to the adapter's window: it runs as hard as the profile
+                # authorizes, up to its own ceiling, and not at all below its
+                # floor (heavy tools stay dormant in a SAFE scan).
+                effective = adapter.effective_intensity(profile.intensity)
+                if effective is None:
+                    run.skipped = (f"needs ≥ {adapter.min_intensity.label} intensity "
+                                   f"(profile is {profile.intensity.label})")
                     ts.runs.append(run)
                     continue
+                run.intensity = effective
 
                 if dry_run:
-                    run.planned = adapter.plan(target, profile.intensity)
+                    run.planned = adapter.plan(target, effective)
                     ts.runs.append(run)
                     continue
 
@@ -132,8 +139,8 @@ class Engine:
                     ts.runs.append(run)
                     continue
 
-                self.log(f"  [{name}] running on {runner.describe()} …")
-                run.findings = adapter.scan(runner, target, profile.intensity)
+                self.log(f"  [{name}] running on {runner.describe()} ({effective.label}) …")
+                run.findings = adapter.scan(runner, target, effective)
                 for f in run.findings:
                     self.store.add_finding(scan_id, f)
                 self.log(f"  [{name}] {len(run.findings)} finding(s)")
