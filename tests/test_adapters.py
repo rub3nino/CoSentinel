@@ -12,6 +12,7 @@ from cosentinel.adapters.nuclei import NucleiAdapter
 from cosentinel.adapters.openvas import OpenvasAdapter
 from cosentinel.adapters.sqlmap import SqlmapAdapter
 from cosentinel.adapters.testssl import TestsslAdapter
+from cosentinel.adapters.ffuf import FfufAdapter
 from cosentinel.adapters.zap import ZapAdapter
 from cosentinel.core.findings import Category, Severity
 from cosentinel.core.profiles import Intensity
@@ -148,6 +149,40 @@ def test_zap_no_report_is_informational():
                              TARGET, Intensity.AGGRESSIVE)
     assert len(out) == 1 and out[0].severity is Severity.INFO
     assert "no report" in out[0].title
+
+
+# -- ffuf -----------------------------------------------------------------
+FFUF_JSON = """{
+  "results": [
+    {"input": {"FUZZ": "admin"}, "status": 200, "length": 512, "url": "http://10.0.0.5/admin"},
+    {"input": {"FUZZ": ".git"}, "status": 301, "length": 0, "url": "http://10.0.0.5/.git"},
+    {"input": {"FUZZ": "images"}, "status": 301, "length": 0, "url": "http://10.0.0.5/images"}
+  ]
+}"""
+
+
+def test_ffuf_is_aggressive_only():
+    assert FfufAdapter().effective_intensity(Intensity.SAFE) is None
+
+
+def test_ffuf_flags_sensitive_paths_higher():
+    out = FfufAdapter().parse([_result(""), _result(""), _result(FFUF_JSON)],
+                              TARGET, Intensity.AGGRESSIVE)
+    assert len(out) == 3
+    git = next(f for f in out if ".git" in f.resource)
+    assert git.severity is Severity.MEDIUM          # sensitive name, even on a 301
+    admin = next(f for f in out if "admin" in f.resource)
+    assert admin.severity is Severity.MEDIUM         # sensitive name + 200
+    images = next(f for f in out if "images" in f.resource)
+    assert images.severity is Severity.INFO          # plain 301, not sensitive
+
+
+def test_ffuf_without_wordlist_is_informational(monkeypatch):
+    monkeypatch.delenv("COSENTINEL_WORDLIST", raising=False)
+    monkeypatch.setattr("cosentinel.adapters.ffuf._wordlist", lambda: None)
+    out = FfufAdapter().parse([_result(""), _result("", "no wordlist given"), _result("")],
+                              TARGET, Intensity.AGGRESSIVE)
+    assert len(out) == 1 and "wordlist" in out[0].title
 
 
 # -- nuclei intensity -----------------------------------------------------
