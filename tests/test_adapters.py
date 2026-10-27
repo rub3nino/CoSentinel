@@ -12,6 +12,7 @@ from cosentinel.adapters.nuclei import NucleiAdapter
 from cosentinel.adapters.openvas import OpenvasAdapter
 from cosentinel.adapters.sqlmap import SqlmapAdapter
 from cosentinel.adapters.testssl import TestsslAdapter
+from cosentinel.adapters.zap import ZapAdapter
 from cosentinel.core.findings import Category, Severity
 from cosentinel.core.profiles import Intensity
 from cosentinel.core.scope import Target
@@ -97,6 +98,56 @@ def test_sqlmap_not_injectable_and_unreachable():
         [_result("[critical] unable to connect to the target URL")],
         TARGET, Intensity.AGGRESSIVE)
     assert len(down) == 1 and "could not reach" in down[0].title
+
+
+# -- zap ------------------------------------------------------------------
+ZAP_JSON = """{
+  "site": [{
+    "@name": "https://example.com",
+    "alerts": [
+      {
+        "pluginid": "40018", "alert": "SQL Injection", "name": "SQL Injection",
+        "riskcode": "3", "confidence": "2",
+        "desc": "<p>SQL injection may be possible.</p>",
+        "solution": "<p>Use parameterized queries.</p>",
+        "reference": "<p>https://owasp.org/sqli</p>", "cweid": "89",
+        "instances": [{"uri": "https://example.com/item?id=1", "method": "GET", "param": "id"}]
+      },
+      {
+        "pluginid": "10020", "alert": "Missing Anti-clickjacking Header",
+        "name": "Missing Anti-clickjacking Header", "riskcode": "2", "confidence": "2",
+        "desc": "<p>X-Frame-Options not set.</p>", "solution": "<p>Set the header.</p>",
+        "reference": "", "cweid": "1021", "instances": []
+      }
+    ]
+  }]
+}"""
+
+
+def test_zap_is_aggressive_only():
+    assert ZapAdapter().effective_intensity(Intensity.SAFE) is None
+    assert ZapAdapter().effective_intensity(Intensity.AGGRESSIVE) == Intensity.AGGRESSIVE
+
+
+def test_zap_parses_alerts_with_risk_and_cwe():
+    # parse() reads the LAST result (the `cat` of the JSON report).
+    out = ZapAdapter().parse([_result(""), _result(""), _result(ZAP_JSON)],
+                             TARGET, Intensity.AGGRESSIVE)
+    assert len(out) == 2
+    sqli = next(f for f in out if "SQL Injection" in f.title)
+    assert sqli.severity is Severity.HIGH and sqli.category is Category.WEB
+    assert "CWE-89" in sqli.references
+    assert "<p>" not in sqli.description  # HTML stripped
+    assert sqli.resource == "https://example.com/item?id=1"
+    header = next(f for f in out if "clickjacking" in f.title.lower())
+    assert header.severity is Severity.MEDIUM
+
+
+def test_zap_no_report_is_informational():
+    out = ZapAdapter().parse([_result(""), _result("", "zap crashed"), _result("")],
+                             TARGET, Intensity.AGGRESSIVE)
+    assert len(out) == 1 and out[0].severity is Severity.INFO
+    assert "no report" in out[0].title
 
 
 # -- nuclei intensity -----------------------------------------------------

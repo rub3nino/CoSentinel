@@ -15,5 +15,6 @@ from . import testssl as _testssl  # noqa: F401
 from . import nikto as _nikto  # noqa: F401
 from . import openvas as _openvas  # noqa: F401
 from . import sqlmap as _sqlmap  # noqa: F401
+from . import zap as _zap  # noqa: F401
 
 __all__ = ["Adapter", "PlannedCommand", "all_adapters", "get_adapter", "register"]
