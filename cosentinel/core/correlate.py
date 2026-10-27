@@ -22,6 +22,10 @@ from dataclasses import dataclass, field
 
 from .findings import Category, Finding, Severity
 
+# Tools that *actively attack*: a HIGH+ finding from one of these is a weakness
+# that was demonstrated, not merely signatured — the strongest possible signal.
+_ACTIVE_SOURCES = {"sqlmap", "zap"}
+
 _PORT_SLASH = re.compile(r"^(\d{1,5})/")        # nmap "22/tcp"
 _PORT_COLON = re.compile(r":(\d{2,5})(?:/|$)")   # "host:443", "id:443", "http://h:8080/x"
 
@@ -35,6 +39,14 @@ def extract_port(f: Finding) -> int | None:
     m = _PORT_COLON.search(r)
     if m:
         return _valid(int(m.group(1)))
+    # A web URL with no explicit port maps to its scheme's conventional port, so
+    # that active web findings (sqlmap/zap/nuclei) land on the same asset as the
+    # open 80/443 that nmap saw — and reinforce it.
+    rl = r.lower()
+    if rl.startswith("https://"):
+        return 443
+    if rl.startswith("http://"):
+        return 80
     # Lynis SSH hardening tests belong to the SSH service.
     if f.source == "lynis" and r.upper().startswith("SSH"):
         return 22
@@ -83,6 +95,14 @@ class Risk:
         )
 
     @property
+    def actively_confirmed(self) -> bool:
+        """Did an attacking tool actually demonstrate a HIGH+ weakness here?"""
+        return any(
+            f.source in _ACTIVE_SOURCES and f.severity >= Severity.HIGH
+            for f in self.findings
+        )
+
+    @property
     def score(self) -> int:
         """Explainable priority score. Higher = more urgent."""
         s = int(self.severity) * 10          # the weakness itself dominates
@@ -92,11 +112,15 @@ class Risk:
             s += 5                            # a public exploit path exists
         if self.exposed and self.severity >= Severity.MEDIUM:
             s += 8                            # reachable AND weak — the worst combo
+        if self.actively_confirmed:
+            s += 10                           # an attack actually worked here
         return s
 
     @property
     def rationale(self) -> str:
         bits: list[str] = []
+        if self.actively_confirmed:
+            bits.append("actively confirmed exploitable")
         if self.exposed and self.severity >= Severity.MEDIUM:
             bits.append("reachable from the network AND weak")
         elif self.exposed:

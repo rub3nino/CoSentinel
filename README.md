@@ -19,6 +19,9 @@ orchestrates established security scanners in one place:
 - **testssl.sh** — TLS / certificate posture of an exposed service, from *outside*.
 - **Nikto** — web-server misconfigurations and dangerous files, from *outside*.
 - **OpenVAS / Greenbone** — deep vulnerability scan via a running GVM instance (opt-in).
+- **ffuf** — content & endpoint discovery (hidden paths, backups, `.git`/`.env`). *Active.*
+- **sqlmap** — SQL-injection detection, and lab-only proof of impact. *Active.*
+- **OWASP ZAP** — full active web-application scan (SQLi, XSS, traversal, …). *Active.*
 
 It normalizes everything into a single **finding** model, keeps history in a local
 SQLite file, and can render a static, read-only HTML report. There is **no always-on
@@ -37,9 +40,12 @@ and carries a **CVE** (Nuclei) surfaces as one high-priority risk — reachable 
 Three ideas are built into the core, not bolted on:
 
 1. **Scope allowlist.** A machine that is not in your config *cannot* be scanned.
-2. **Intensity tiers.** `passive → safe → aggressive → exploit`. v1 ships **detection
-   only** (max `safe`). Aggressive needs an explicit `--confirm`; exploit additionally
-   requires the target to be marked `lab: true`.
+2. **Intensity tiers.** `passive → safe → aggressive → exploit`. The default profiles
+   are **detection only** (`safe`). The active profiles (`pentest`, `exploit`) send real
+   payloads the way a human tester does and are gated: aggressive needs an explicit
+   `--confirm`; exploit additionally requires the target to be marked `lab: true`.
+   A profile's intensity is a *ceiling* — each tool runs only as hard as it is allowed,
+   and the heavy tools (sqlmap/ZAP/ffuf) never fire in a `safe` scan at all.
 3. **Audit log.** Every authorized (or refused) action is written to an append-only log.
 
 Use it only on systems you own or are explicitly authorized to test.
@@ -94,6 +100,18 @@ targets:
 | `web`     | safe      | nikto                 | Web-server misconfigurations |
 | `full`    | safe      | lynis + nmap + nuclei + testssl + nikto | Everything available |
 | `openvas` | safe      | openvas               | Deep GVM scan (needs a running Greenbone) |
+| `pentest` | aggressive | lynis + nmap + nuclei + testssl + nikto + ffuf + sqlmap + zap | Active testing like a human attacker. **Needs `--confirm`.** |
+| `exploit` | exploit   | nmap + nuclei + testssl + nikto + sqlmap + zap | Prove impact, not just presence. **Needs `--confirm` + `lab: true`.** |
+
+> The `safe` profiles run with no extra ceremony. `pentest` sends real payloads
+> (SQL injection, XSS, fuzzing, path brute-forcing) and requires `--confirm`.
+> `exploit` additionally proves impact (e.g. sqlmap reaching the DBMS) and only
+> runs against a target you have explicitly marked `lab: true`.
+
+```bash
+cosentinel scan e0 -p pentest --confirm        # active test of a host you own
+cosentinel scan e0 -p pentest --confirm --dry-run   # see exactly what WOULD run first
+```
 
 ### Targets: machines *and* websites
 
@@ -115,9 +133,10 @@ targets:
 
 ## Status
 
-**Detection only** (Lynis + Nmap + Nuclei + testssl.sh + Nikto). The architecture is
-designed so more scanners (OpenVAS, ZAP) and, later, gated exploitation tooling slot in
-as new adapters without touching the rest. See [ARCHITECTURE.md](ARCHITECTURE.md).
+**Detection** (Lynis, Nmap, Nuclei, testssl.sh, Nikto, OpenVAS) **plus gated active
+testing** (nuclei DAST, ffuf, sqlmap, OWASP ZAP) behind the `pentest`/`exploit` tiers.
+Exploitation is limited to proving impact (e.g. sqlmap reaching the DBMS) and only on
+`lab` targets; it never dumps table data. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Tests
 

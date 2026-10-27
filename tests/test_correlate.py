@@ -47,6 +47,21 @@ def test_cve_raises_score_and_rationale():
     assert "known CVE" in r.rationale
 
 
+def test_active_sqli_on_open_web_port_tops_the_list():
+    findings = [
+        F("nmap", Severity.INFO, Category.NETWORK, "Open port 443/tcp", "443/tcp"),
+        F("sqlmap", Severity.HIGH, Category.VULNERABILITY,
+          "SQL injection in parameter 'id' (GET)", "https://h (param: id [GET])", refs=["CWE-89"]),
+    ]
+    r = correlate(findings)[0]
+    # The web finding (no explicit port) maps to 443 and joins the open port.
+    assert r.key == "port 443"
+    assert r.actively_confirmed and r.exposed
+    assert "actively confirmed exploitable" in r.rationale
+    # HIGH(30) + 2 tools(5) + reachable&weak(8) + actively confirmed(10)
+    assert r.score == 30 + 5 + 8 + 10
+
+
 def test_exposed_medium_outranks_isolated_low():
     findings = [
         F("lynis", Severity.LOW, Category.HARDENING, "minor", "AUTH-1"),

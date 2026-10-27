@@ -40,10 +40,16 @@ cosentinel/
 ├── transport/
 │   └── ssh.py        # LocalRunner + SSHRunner (the ONLY code that touches a machine)
 ├── adapters/
-│   ├── base.py       # Adapter ABC + registry
+│   ├── base.py       # Adapter ABC + registry + intensity window
 │   ├── lynis.py      # hardening audit (runs INSIDE the target)
-│   ├── nmap.py       # network surface (runs FROM scanner TOWARD target)
-│   └── nuclei.py     # known-vuln detection (FROM scanner TOWARD target)
+│   ├── nmap.py       # network surface (FROM scanner; aggressive adds vuln NSE)
+│   ├── nuclei.py     # known-vuln detection; aggressive = DAST/fuzzing
+│   ├── testssl.py    # TLS/certificate posture
+│   ├── nikto.py      # web-server misconfigurations
+│   ├── openvas.py    # deep GVM scan (talks GMP to a running Greenbone)
+│   ├── ffuf.py       # content/endpoint discovery      (ACTIVE: aggressive-only)
+│   ├── sqlmap.py     # SQL injection                   (ACTIVE: aggressive→exploit)
+│   └── zap.py        # full active web-app scan         (ACTIVE: aggressive-only)
 ├── report/
 │   └── html.py       # static, read-only HTML report (a tool output, not the website)
 ├── config.py         # YAML config = the allowlist; .cosentinel/ holds local state
@@ -137,14 +143,22 @@ ever needs to be multi-user and always-on.
 
 - **v1 (done):** adapter engine + scope/audit + Lynis + Nmap + Nuclei + SQLite +
   CLI + static report.
-- **v2 (in progress):** more detection adapters — testssl.sh ✓, Nikto ✓,
+- **v2 (done):** more detection adapters — testssl.sh ✓, Nikto ✓,
   OpenVAS/Greenbone ✓ (report parser tested; live GMP lifecycle needs a running
-  GVM to validate), web-only targets ✓; then ZAP; scheduling.
-- **v3:** correlation/prioritization across adapters ✓ (`core/correlate.py`,
-  `cosentinel risks`); next: the marketing website; optional local-AI
-  remediation summaries.
+  GVM to validate), web-only targets ✓.
+- **v3 (done):** correlation/prioritization across adapters ✓ (`core/correlate.py`,
+  `cosentinel risks`).
+- **v3.5 (done):** the aggressive tier is live — per-adapter intensity window
+  (profile intensity is a ceiling, each tool clamps to its own), gated
+  `pentest`/`exploit` profiles, and **active** adapters: nuclei DAST/fuzzing,
+  ffuf (discovery), sqlmap (SQLi; lab-only impact), OWASP ZAP (active scan).
+  Parsers unit-tested; the live invocation of sqlmap/ZAP/ffuf against a real
+  target should be validated against installed tools.
+- **next:** the marketing website; optional local-AI remediation summaries;
+  scheduling.
 - **v4 (gated):** exploitation adapters (Metasploit, …) strictly behind the
-  `exploit` tier and `lab`-only targets.
+  `exploit` tier and `lab`-only targets. sqlmap's impact proof is the first
+  step into this half of the scale.
 
 ## 8. Adding a new scanner (the common case)
 

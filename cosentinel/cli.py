@@ -88,13 +88,15 @@ def cmd_adapters(args: argparse.Namespace) -> int:
     local = LocalRunner()
     if _console:
         t = Table(title="Scanner adapters")
-        for col in ("adapter", "tool", "runs from", "max intensity", "tool on this host"):
+        for col in ("adapter", "tool", "runs from", "intensity", "tool on this host"):
             t.add_column(col)
         for a in all_adapters():
+            window = (a.max_intensity.label if a.min_intensity == a.max_intensity
+                      else f"{a.min_intensity.label}→{a.max_intensity.label}")
             t.add_row(
                 a.name, a.requires_tool,
                 "inside target" if a.runs_on == "target" else "scanner → target",
-                a.max_intensity.label,
+                window,
                 "[green]yes[/green]" if local.which(a.requires_tool) else "[red]no[/red]",
             )
         _console.print(t)
