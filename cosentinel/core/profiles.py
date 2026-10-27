@@ -72,11 +72,17 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         intensity=Intensity.SAFE,
         adapters=("nuclei",),
     ),
+    "tls": Profile(
+        name="tls",
+        description="TLS/certificate posture of an exposed service (testssl.sh).",
+        intensity=Intensity.SAFE,
+        adapters=("testssl",),
+    ),
     "full": Profile(
         name="full",
-        description="Everything in v1: hardening + network + known vulnerabilities.",
+        description="Everything: hardening + network + known vulnerabilities + TLS.",
         intensity=Intensity.SAFE,
-        adapters=("lynis", "nmap", "nuclei"),
+        adapters=("lynis", "nmap", "nuclei", "testssl"),
     ),
 }
 

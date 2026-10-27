@@ -16,6 +16,7 @@ orchestrates established security scanners in one place:
 - **Lynis** — host hardening audit, from *inside* the machine.
 - **Nmap** — network surface, seen from *outside*.
 - **Nuclei** — known-vulnerability detection against exposed services.
+- **testssl.sh** — TLS / certificate posture of an exposed service, from *outside*.
 
 It normalizes everything into a single **finding** model, keeps history in a local
 SQLite file, and can render a static, read-only HTML report. There is **no always-on
@@ -81,12 +82,13 @@ targets:
 | `audit`   | safe      | lynis                 | Hardening audit from inside |
 | `network` | safe      | nmap                  | Network surface from outside |
 | `vuln`    | safe      | nuclei                | Known-vulnerability detection |
-| `full`    | safe      | lynis + nmap + nuclei | Everything in v1 |
+| `tls`     | safe      | testssl               | TLS/certificate posture |
+| `full`    | safe      | lynis + nmap + nuclei + testssl | Everything available |
 
 ## Status
 
-**v1 — detection only** (Lynis + Nmap + Nuclei). The architecture is designed so more
-scanners (OpenVAS, testssl, ZAP) and, later, gated exploitation tooling slot in as new
+**Detection only** (Lynis + Nmap + Nuclei + testssl.sh). The architecture is designed so
+more scanners (OpenVAS, Nikto, ZAP) and, later, gated exploitation tooling slot in as new
 adapters without touching the rest. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Tests

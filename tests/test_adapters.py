@@ -8,6 +8,7 @@ rather than silently producing garbage.
 from cosentinel.adapters.lynis import LynisAdapter
 from cosentinel.adapters.nmap import NmapAdapter
 from cosentinel.adapters.nuclei import NucleiAdapter
+from cosentinel.adapters.testssl import TestsslAdapter
 from cosentinel.core.findings import Category, Severity
 from cosentinel.core.profiles import Intensity
 from cosentinel.core.scope import Target
@@ -111,4 +112,45 @@ def test_lynis_parses_warnings_suggestions_and_index():
 def test_lynis_no_report_is_reported_not_crashed():
     findings = LynisAdapter().parse([_result("", stderr="sudo: no"), _result("")],
                                     TARGET, Intensity.SAFE)
+    assert findings and findings[0].severity is Severity.INFO
+
+
+# -- testssl --------------------------------------------------------------
+# testssl.sh flat --jsonfile output: a JSON array of check results.
+TESTSSL_JSON = """[
+  {"id":"SSLv2","ip":"ex/1.2.3.4","port":"443","severity":"OK","finding":"not offered"},
+  {"id":"cert_chain_of_trust","ip":"ex","port":"443","severity":"HIGH","finding":"failed (chain incomplete)"},
+  {"id":"cert_expirationStatus","port":"443","severity":"WARN","finding":"expires < 60 days"},
+  {"id":"TLS1","port":"443","severity":"LOW","finding":"offered (deprecated)"},
+  {"id":"heartbleed","port":"443","severity":"INFO","finding":"not vulnerable"},
+  {"id":"BEAST","port":"443","severity":"MEDIUM","finding":"VULNERABLE","cve":"CVE-2011-3389"}
+]"""
+
+
+def test_testssl_keeps_problems_and_drops_healthy_lines():
+    findings = TestsslAdapter().parse(
+        [_result("scan done"), _result(TESTSSL_JSON)], TARGET, Intensity.SAFE
+    )
+    # OK and INFO lines (SSLv2, heartbleed) are dropped; 4 real issues remain.
+    assert len(findings) == 4
+    assert all(f.category == Category.TLS for f in findings)
+    sev_by_id = {f.raw["id"]: f.severity for f in findings}
+    assert sev_by_id["cert_chain_of_trust"] is Severity.HIGH
+    assert sev_by_id["cert_expirationStatus"] is Severity.MEDIUM   # WARN -> MEDIUM
+    assert sev_by_id["TLS1"] is Severity.LOW
+    beast = [f for f in findings if f.raw["id"] == "BEAST"][0]
+    assert "CVE-2011-3389" in beast.references
+
+
+def test_testssl_clean_target_gives_info():
+    findings = TestsslAdapter().parse(
+        [_result("scan done"), _result("[]")], TARGET, Intensity.SAFE
+    )
+    assert len(findings) == 1 and findings[0].severity is Severity.INFO
+
+
+def test_testssl_no_json_is_reported_not_crashed():
+    findings = TestsslAdapter().parse(
+        [_result("", stderr="connection refused"), _result("")], TARGET, Intensity.SAFE
+    )
     assert findings and findings[0].severity is Severity.INFO

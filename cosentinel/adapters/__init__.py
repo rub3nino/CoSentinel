@@ -11,5 +11,6 @@ from .base import Adapter, PlannedCommand, all_adapters, get_adapter, register
 from . import lynis as _lynis  # noqa: F401
 from . import nmap as _nmap    # noqa: F401
 from . import nuclei as _nuclei  # noqa: F401
+from . import testssl as _testssl  # noqa: F401
 
 __all__ = ["Adapter", "PlannedCommand", "all_adapters", "get_adapter", "register"]
