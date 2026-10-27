@@ -15,6 +15,9 @@ credentials are not written to disk):
     GVM_SCAN_CONFIG  scan config id   (default: "Full and fast")
     GVM_SCANNER      scanner id       (default: OpenVAS default scanner)
     GVM_MAX_WAIT     seconds to wait for the scan (default 3600)
+    GVM_CLI          override the gvm-cli command when it must run elsewhere,
+                     e.g. inside the dockerized GVM:
+                       "docker compose -f /path/compose.yaml exec -T gvm-tools gvm-cli"
 
 NOTE: the GMP report XML *parser* is unit-tested; the live task lifecycle
 requires a running GVM instance and must be validated against one before it is
@@ -24,6 +27,7 @@ trusted. Without GVM, the adapter reports that cleanly instead of pretending.
 from __future__ import annotations
 
 import os
+import shlex
 import time
 import xml.etree.ElementTree as ET
 
@@ -46,6 +50,12 @@ _THREAT = {
     "High": Severity.HIGH,
     "Critical": Severity.CRITICAL,
 }
+
+
+def _cli() -> list[str]:
+    """The gvm-cli command, overridable via GVM_CLI (e.g. to run it inside the
+    GVM container through `docker compose exec`)."""
+    return shlex.split(os.environ.get("GVM_CLI", "gvm-cli")) or ["gvm-cli"]
 
 
 def _connection() -> list[str]:
@@ -91,9 +101,14 @@ class OpenvasAdapter(Adapter):
     runs_on = "scanner"
     max_intensity = Intensity.SAFE
 
+    def available(self, runner: Runner) -> bool:
+        # Honor a GVM_CLI override (e.g. "docker … exec … gvm-cli"): check that
+        # its actual launcher (docker/gvm-cli/…) exists, not the literal gvm-cli.
+        return runner.which(_cli()[0])
+
     # -- dry-run visibility: a representative view of the lifecycle ---------
     def plan(self, target: Target, intensity: Intensity) -> list[PlannedCommand]:
-        base = ["gvm-cli", *_connection(), "--xml"]
+        base = [*_cli(), *_connection(), "--xml"]
         host = target.host
         return [
             PlannedCommand(argv=[*base, "<get_version/>"], label="check GVM connectivity"),
@@ -109,7 +124,7 @@ class OpenvasAdapter(Adapter):
 
     # -- the real lifecycle ------------------------------------------------
     def scan(self, runner: Runner, target: Target, intensity: Intensity) -> list[Finding]:
-        base = ["gvm-cli", *_connection(), "--xml"]
+        base = [*_cli(), *_connection(), "--xml"]
 
         def gmp(xml: str, timeout: int = 180) -> CommandResult:
             return runner.run([*base, xml], timeout=timeout)

@@ -262,3 +262,11 @@ def test_openvas_empty_report_is_reported():
     assert fs and fs[0].severity is Severity.INFO
     fs2 = OpenvasAdapter().parse([_result("")], TARGET, Intensity.SAFE)
     assert fs2 and "empty report" in fs2[0].title
+
+
+def test_openvas_cli_override(monkeypatch):
+    from cosentinel.adapters.openvas import _cli
+    monkeypatch.delenv("GVM_CLI", raising=False)
+    assert _cli() == ["gvm-cli"]
+    monkeypatch.setenv("GVM_CLI", "docker compose exec -T gvm-tools gvm-cli")
+    assert _cli()[0] == "docker" and _cli()[-1] == "gvm-cli"
