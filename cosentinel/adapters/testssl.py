@@ -22,6 +22,11 @@ from .base import Adapter, PlannedCommand, register
 
 _JSON = "/tmp/cosentinel-testssl.json"
 
+
+def _humanize(test_id: str) -> str:
+    """'overall_grade' -> 'Overall grade' — a readable label from a testssl id."""
+    return test_id.replace("_", " ").replace("-", " ").strip().capitalize()
+
 # testssl meta entries that describe the scan or the local tool, not the target.
 # `engine_problem` in particular is about the scanner host's openssl, so it must
 # never become a finding about the target.
@@ -117,9 +122,18 @@ class TestsslAdapter(Adapter):
             finding_text = str(obj.get("finding", "")).strip()
             port = str(obj.get("port", "")).strip()
             refs = [c for c in str(obj.get("cve", "")).split() if c.startswith("CVE")]
+            # Some checks report a terse value (a grade like "T"/"A+"): on its own
+            # that is an unreadable title, so prefix the humanized check id.
+            label = _humanize(test_id)
+            if len(finding_text) >= 5:
+                title = finding_text
+            elif finding_text:
+                title = f"{label}: {finding_text}" if label else finding_text
+            else:
+                title = label or "TLS finding"
             findings.append(Finding(
                 source=self.name, target=target.id, severity=sev, category=Category.TLS,
-                title=finding_text or test_id,
+                title=title,
                 resource=f"{test_id}:{port}" if port else test_id,
                 description=f"testssl.sh check `{test_id}`.",
                 remediation="Review the TLS/certificate configuration of this service "

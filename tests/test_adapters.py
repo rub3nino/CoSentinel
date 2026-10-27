@@ -314,6 +314,15 @@ def test_testssl_keeps_problems_and_drops_healthy_lines():
     assert "CVE-2011-3389" in beast.references
 
 
+def test_testssl_terse_grade_gets_readable_title():
+    # overall_grade reports the bare grade ("T") as its finding text; on its own
+    # that is a useless title, so it must be prefixed with the humanized id.
+    data = '[{"id":"overall_grade","port":"443","severity":"CRITICAL","finding":"T"}]'
+    f = TestsslAdapter().parse([_result("scan done"), _result(data)], TARGET, Intensity.SAFE)[0]
+    assert f.title == "Overall grade: T"
+    assert f.severity is Severity.CRITICAL
+
+
 def test_testssl_clean_target_gives_info():
     findings = TestsslAdapter().parse(
         [_result("scan done"), _result("[]")], TARGET, Intensity.SAFE
