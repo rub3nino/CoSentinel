@@ -113,6 +113,25 @@ cosentinel scan e0 -p pentest --confirm        # active test of a host you own
 cosentinel scan e0 -p pentest --confirm --dry-run   # see exactly what WOULD run first
 ```
 
+**ffuf wordlist:** point `COSENTINEL_WORDLIST` at a wordlist, or install one
+(SecLists/dirb); a small starter list ships in `wordlists/common-web.txt`.
+
+**Running ZAP natively (for Tailscale / host-only targets):** ZAP's packaged
+`zap-full-scan.py` only ships in its Docker image, and a Docker container can't
+reach a Tailscale IP. To run ZAP against such a target, install ZAP natively and
+point the adapter at the bundled shim, which drives `zap.sh` in quick-scan mode:
+
+```bash
+# one-time: install a JDK 17+ and ZAP (the Homebrew cask is currently disabled,
+# so fetch ZAP's Cross-Platform package from the official release), then:
+export COSENTINEL_ZAP="$PWD/scripts/zap-native.sh"   # or symlink it somewhere on PATH
+cosentinel scan e0 -p pentest --confirm
+```
+
+The shim finds `openjdk` and `zap.sh` automatically (override with `JAVA_HOME` /
+`ZAP_SH`). The `COSENTINEL_ZAP` override also accepts a full command, e.g. a
+`docker … zap-full-scan.py` invocation, exactly like `GVM_CLI` for OpenVAS.
+
 ### Targets: machines *and* websites
 
 A target can be the local box (`ssh: false`, host `127.0.0.1`), a remote host over

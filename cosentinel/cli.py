@@ -97,12 +97,14 @@ def cmd_adapters(args: argparse.Namespace) -> int:
                 a.name, a.requires_tool,
                 "inside target" if a.runs_on == "target" else "scanner → target",
                 window,
-                "[green]yes[/green]" if local.which(a.requires_tool) else "[red]no[/red]",
+                # a.available() honors overrides (COSENTINEL_ZAP / GVM_CLI),
+                # which a raw which(requires_tool) would miss.
+                "[green]yes[/green]" if a.available(local) else "[red]no[/red]",
             )
         _console.print(t)
     else:
         for a in all_adapters():
-            print(f"{a.name}\t{a.requires_tool}\t{local.which(a.requires_tool)}")
+            print(f"{a.name}\t{a.requires_tool}\t{a.available(local)}")
     return 0
 
 

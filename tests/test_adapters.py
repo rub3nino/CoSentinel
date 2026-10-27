@@ -144,6 +144,16 @@ def test_zap_parses_alerts_with_risk_and_cwe():
     assert header.severity is Severity.MEDIUM
 
 
+def test_zap_cmd_override_switches_launcher(monkeypatch):
+    from cosentinel.adapters.zap import _zap_cmd
+    monkeypatch.setenv("COSENTINEL_ZAP", "/x/zap-native.sh")
+    scan_cmd = ZapAdapter().plan(TARGET, Intensity.AGGRESSIVE)[1].argv
+    assert scan_cmd[0] == "/x/zap-native.sh"
+    assert "-t" in scan_cmd and TARGET.web_target in scan_cmd
+    monkeypatch.delenv("COSENTINEL_ZAP")
+    assert _zap_cmd() == ["zap-full-scan.py"]
+
+
 def test_zap_no_report_is_informational():
     out = ZapAdapter().parse([_result(""), _result("", "zap crashed"), _result("")],
                              TARGET, Intensity.AGGRESSIVE)

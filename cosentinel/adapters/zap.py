@@ -15,18 +15,28 @@ depends on your ZAP install and should be validated against a running ZAP.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
 
 from ..core.findings import Category, Finding, Severity
 from ..core.profiles import Intensity
 from ..core.scope import Target
-from ..transport.ssh import CommandResult
+from ..transport.ssh import CommandResult, Runner
 from .base import Adapter, PlannedCommand, register
 
 _REPORT = "/tmp/cosentinel-zap.json"
 # ZAP riskcode -> our Severity. ZAP tops out at High; it has no "critical".
 _RISK = {"3": Severity.HIGH, "2": Severity.MEDIUM, "1": Severity.LOW, "0": Severity.INFO}
 _TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _zap_cmd() -> list[str]:
+    """The ZAP launcher. Defaults to the Docker packaged-scan `zap-full-scan.py`;
+    override with COSENTINEL_ZAP to run ZAP natively (e.g. scripts/zap-native.sh),
+    which is what reaches a Tailscale/host-only target Docker cannot. The override
+    still receives the same `-t URL -J report -I` flags."""
+    return shlex.split(os.environ.get("COSENTINEL_ZAP", "")) or ["zap-full-scan.py"]
 
 
 def _clean(html: str) -> str:
@@ -41,11 +51,16 @@ class ZapAdapter(Adapter):
     min_intensity = Intensity.AGGRESSIVE   # active attack — never in a SAFE scan
     max_intensity = Intensity.AGGRESSIVE
 
+    def available(self, runner: Runner) -> bool:
+        # Honor a COSENTINEL_ZAP override (e.g. the native shim): check its actual
+        # launcher exists, not the literal zap-full-scan.py.
+        return runner.which(_zap_cmd()[0])
+
     def plan(self, target: Target, intensity: Intensity) -> list[PlannedCommand]:
         return [
             PlannedCommand(argv=["rm", "-f", _REPORT], timeout=30, label="clear old report"),
             PlannedCommand(
-                argv=["zap-full-scan.py", "-t", target.web_target, "-J", _REPORT, "-I"],
+                argv=[*_zap_cmd(), "-t", target.web_target, "-J", _REPORT, "-I"],
                 timeout=3600, label="ZAP full active scan",
             ),
             PlannedCommand(argv=["cat", _REPORT], timeout=30, label="read report"),
