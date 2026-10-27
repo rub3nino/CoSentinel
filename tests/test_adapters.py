@@ -157,6 +157,31 @@ def test_testssl_no_json_is_reported_not_crashed():
     assert findings and findings[0].severity is Severity.INFO
 
 
+def test_testssl_skips_local_engine_warning():
+    # testssl emits an `engine_problem` WARN about the scanner's own openssl;
+    # it must not become a finding about the target.
+    data = """[
+      {"id":"engine_problem","port":"443","severity":"WARN","finding":"No engine or GOST support via engine with your openssl"},
+      {"id":"cert_chain_of_trust","port":"443","severity":"HIGH","finding":"self signed"}
+    ]"""
+    findings = TestsslAdapter().parse([_result("x"), _result(data)], TARGET, Intensity.SAFE)
+    assert len(findings) == 1 and findings[0].raw["id"] == "cert_chain_of_trust"
+
+
+def test_testssl_failure_is_distinct_from_clean(tmp_path=None):
+    # 3-command shape (rm, scan, cat). Empty report + scan error => "did not
+    # produce a report", NOT a false "no issues found".
+    results = [_result("rm"),
+               _result("", stderr='Fatal error: non-empty "..." exists', rc=1),
+               _result("")]
+    f = TestsslAdapter().parse(results, TARGET, Intensity.SAFE)[0]
+    assert f.severity is Severity.INFO and "did not produce a report" in f.title
+    # Truly clean target (empty, no error) reads as "no TLS issues found".
+    clean = TestsslAdapter().parse([_result("rm"), _result(""), _result("")],
+                                   TARGET, Intensity.SAFE)[0]
+    assert "no TLS issues found" in clean.title
+
+
 # -- nikto ----------------------------------------------------------------
 NIKTO_JSON = """{
   "host":"10.0.0.5","ip":"10.0.0.5","port":"80","banner":"Apache/2.4.49",

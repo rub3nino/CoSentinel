@@ -22,6 +22,11 @@ from .base import Adapter, PlannedCommand, register
 
 _JSON = "/tmp/cosentinel-testssl.json"
 
+# testssl meta entries that describe the scan or the local tool, not the target.
+# `engine_problem` in particular is about the scanner host's openssl, so it must
+# never become a finding about the target.
+_SKIP_IDS = {"engine_problem", "scanProblem", "scanTime", "service", "pre_128cipher"}
+
 # testssl severities -> our Severity. Values that mean "no problem" map to None
 # and are dropped so the report only carries actionable findings.
 _SEV_MAP = {
@@ -45,18 +50,22 @@ class TestsslAdapter(Adapter):
     max_intensity = Intensity.SAFE
 
     def plan(self, target: Target, intensity: Intensity) -> list[PlannedCommand]:
+        # testssl refuses to overwrite an existing --jsonfile, so a stale file
+        # from a previous run would make every later scan silently empty. Remove
+        # it first. (--fast is intentionally dropped: testssl itself warns it is
+        # no longer recommended.)
         return [
+            PlannedCommand(argv=["rm", "-f", _JSON], timeout=30, label="clear stale testssl json"),
             PlannedCommand(
                 argv=[
                     "testssl.sh",
                     "--quiet",            # no banner
                     "--color", "0",       # no ANSI
                     "--warnings", "batch",  # never prompt
-                    "--fast",             # skip exhaustive cipher enumeration
                     "--jsonfile", _JSON,
                     target.web_target,
                 ],
-                timeout=1800,
+                timeout=2400,
                 label="testssl scan",
             ),
             PlannedCommand(argv=["cat", _JSON], timeout=60, label="read testssl json"),
@@ -65,22 +74,42 @@ class TestsslAdapter(Adapter):
     def parse(
         self, results: list[CommandResult], target: Target, intensity: Intensity
     ) -> list[Finding]:
-        report = results[-1].stdout if results else ""
-        try:
-            entries = json.loads(report) if report.strip() else []
-        except json.JSONDecodeError:
-            audit = results[0] if results else None
-            msg = (audit.stderr.strip() if audit else "") or "testssl produced no JSON"
+        cat = results[-1] if results else None
+        scan = results[-2] if len(results) >= 2 else None
+        report = cat.stdout if cat else ""
+
+        if not report.strip():
+            # Empty report: either testssl failed (surface its error) or the
+            # target genuinely had nothing to report. Don't conflate the two.
+            err = (scan.stderr.strip() if scan else "") or (cat.stderr.strip() if cat else "")
+            if err:
+                return [Finding(
+                    source=self.name, target=target.id, severity=Severity.INFO,
+                    category=Category.INFO, title="testssl did not produce a report",
+                    description=err[:300],
+                )]
             return [Finding(
                 source=self.name, target=target.id, severity=Severity.INFO,
-                category=Category.INFO, title="testssl produced no parseable output",
-                description=msg,
+                category=Category.INFO, title="testssl: no TLS issues found",
+                resource=target.web_target,
+            )]
+
+        try:
+            entries = json.loads(report)
+        except json.JSONDecodeError:
+            msg = (scan.stderr.strip() if scan else "") or "testssl output was not valid JSON"
+            return [Finding(
+                source=self.name, target=target.id, severity=Severity.INFO,
+                category=Category.INFO, title="testssl produced unparseable output",
+                description=msg[:300],
             )]
 
         findings: list[Finding] = []
         for obj in entries:
             if not isinstance(obj, dict):
                 continue
+            if str(obj.get("id", "")) in _SKIP_IDS:
+                continue  # scan/tool meta, not a target issue
             sev = _SEV_MAP.get(str(obj.get("severity", "")).upper(), None)
             if sev is None:
                 continue  # healthy / non-actionable line

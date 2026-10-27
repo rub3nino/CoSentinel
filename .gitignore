@@ -13,6 +13,8 @@ venv/
 # your real allowlist is personal; commit cosentinel.example.yaml instead
 cosentinel.yaml
 cosentinel-report-*.html
+# generated reports contain scanned-target details — keep local
+report*.html
 *.db
 *.jsonl
 
