@@ -22,7 +22,7 @@ def test_engine_dry_run_plans_but_does_not_execute(tmp_path):
 
     # Every adapter in the profile should have produced a plan.
     planned_tools = {run.adapter for run in ts.runs if run.planned}
-    assert planned_tools == {"lynis", "nmap", "nuclei", "testssl"}
+    assert planned_tools == {"lynis", "nmap", "nuclei", "testssl", "nikto"}
 
     # The nmap plan targets the host; lynis plans a sudo audit.
     nmap_run = next(r for r in ts.runs if r.adapter == "nmap")

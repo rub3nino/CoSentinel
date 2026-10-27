@@ -17,6 +17,7 @@ orchestrates established security scanners in one place:
 - **Nmap** — network surface, seen from *outside*.
 - **Nuclei** — known-vulnerability detection against exposed services.
 - **testssl.sh** — TLS / certificate posture of an exposed service, from *outside*.
+- **Nikto** — web-server misconfigurations and dangerous files, from *outside*.
 
 It normalizes everything into a single **finding** model, keeps history in a local
 SQLite file, and can render a static, read-only HTML report. There is **no always-on
@@ -83,13 +84,14 @@ targets:
 | `network` | safe      | nmap                  | Network surface from outside |
 | `vuln`    | safe      | nuclei                | Known-vulnerability detection |
 | `tls`     | safe      | testssl               | TLS/certificate posture |
-| `full`    | safe      | lynis + nmap + nuclei + testssl | Everything available |
+| `web`     | safe      | nikto                 | Web-server misconfigurations |
+| `full`    | safe      | lynis + nmap + nuclei + testssl + nikto | Everything available |
 
 ## Status
 
-**Detection only** (Lynis + Nmap + Nuclei + testssl.sh). The architecture is designed so
-more scanners (OpenVAS, Nikto, ZAP) and, later, gated exploitation tooling slot in as new
-adapters without touching the rest. See [ARCHITECTURE.md](ARCHITECTURE.md).
+**Detection only** (Lynis + Nmap + Nuclei + testssl.sh + Nikto). The architecture is
+designed so more scanners (OpenVAS, ZAP) and, later, gated exploitation tooling slot in
+as new adapters without touching the rest. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Tests
 

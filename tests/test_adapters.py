@@ -6,6 +6,7 @@ rather than silently producing garbage.
 """
 
 from cosentinel.adapters.lynis import LynisAdapter
+from cosentinel.adapters.nikto import NiktoAdapter
 from cosentinel.adapters.nmap import NmapAdapter
 from cosentinel.adapters.nuclei import NucleiAdapter
 from cosentinel.adapters.testssl import TestsslAdapter
@@ -153,4 +154,41 @@ def test_testssl_no_json_is_reported_not_crashed():
     findings = TestsslAdapter().parse(
         [_result("", stderr="connection refused"), _result("")], TARGET, Intensity.SAFE
     )
+    assert findings and findings[0].severity is Severity.INFO
+
+
+# -- nikto ----------------------------------------------------------------
+NIKTO_JSON = """{
+  "host":"10.0.0.5","ip":"10.0.0.5","port":"80","banner":"Apache/2.4.49",
+  "vulnerabilities":[
+    {"id":"999103","method":"GET","url":"/","msg":"The anti-clickjacking X-Frame-Options header is not present."},
+    {"id":"999970","method":"GET","url":"/","msg":"Server may leak inodes via ETags"},
+    {"id":"600449","method":"GET","url":"/cgi-bin/","msg":"Apache 2.4.49 appears vulnerable to path traversal","references":"CVE-2021-41773"}
+  ]
+}"""
+
+
+def test_nikto_parses_vulns_and_bumps_severity():
+    findings = NiktoAdapter().parse(
+        [_result("scan done"), _result(NIKTO_JSON)], TARGET, Intensity.SAFE
+    )
+    assert len(findings) == 3
+    assert all(f.category == Category.WEB for f in findings)
+    # path-traversal item has a CVE -> MEDIUM, with the CVE referenced
+    trav = [f for f in findings if "traversal" in f.title.lower()][0]
+    assert trav.severity is Severity.MEDIUM and "CVE-2021-41773" in trav.references
+    # a plain missing-header item stays LOW
+    header = [f for f in findings if "X-Frame-Options" in f.title][0]
+    assert header.severity is Severity.LOW
+    assert header.resource == "GET /"
+
+
+def test_nikto_accepts_array_form_and_empty():
+    assert NiktoAdapter().parse([_result("x"), _result('[{"vulnerabilities":[]}]')],
+                                TARGET, Intensity.SAFE)[0].severity is Severity.INFO
+
+
+def test_nikto_no_json_is_reported_not_crashed():
+    findings = NiktoAdapter().parse([_result("", stderr="host down"), _result("")],
+                                    TARGET, Intensity.SAFE)
     assert findings and findings[0].severity is Severity.INFO
