@@ -26,6 +26,11 @@ service and nothing exposed to the internet** — the whole state is one folder 
 > Cosentinel does not reinvent scanners. Its value is **orchestration, normalization,
 > correlation and history** across tools that otherwise live in separate silos.
 
+`cosentinel risks` is where that pays off: findings are grouped by asset (mostly the
+port) and scored, so a weak SSH config (Lynis) on a port that is **also open** (Nmap)
+and carries a **CVE** (Nuclei) surfaces as one high-priority risk — reachable *and* weak
+*and* corroborated — instead of three unrelated lines.
+
 ## Why it is safe to run
 
 Three ideas are built into the core, not bolted on:
@@ -60,6 +65,7 @@ cosentinel targets              # show the allowlist
 cosentinel adapters             # which scanners are available on this host
 cosentinel scan localhost --dry-run   # see the EXACT commands, run nothing
 cosentinel scan localhost       # run the 'full' profile (SAFE)
+cosentinel risks localhost      # correlated, prioritized risks (not raw findings)
 cosentinel report localhost -o report.html   # static HTML report
 cosentinel diff localhost       # what changed since the previous scan
 cosentinel history              # past scans

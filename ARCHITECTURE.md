@@ -35,6 +35,7 @@ cosentinel/
 │   ├── profiles.py   # Intensity tiers + named profiles (audit/network/vuln/full)
 │   ├── scope.py      # Target, Scope (allowlist + authorize()), AuditLog
 │   ├── store.py      # SQLite: scans, findings, history, diff()
+│   ├── correlate.py  # group findings by asset into prioritized, scored risks
 │   └── engine.py     # orchestrator: authorize → pick runner → run adapters → store
 ├── transport/
 │   └── ssh.py        # LocalRunner + SSHRunner (the ONLY code that touches a machine)
@@ -136,10 +137,11 @@ ever needs to be multi-user and always-on.
 
 - **v1 (done):** adapter engine + scope/audit + Lynis + Nmap + Nuclei + SQLite +
   CLI + static report.
-- **v2:** more detection adapters — OpenVAS/Greenbone, testssl.sh, ZAP/Nikto;
-  CVE correlation (searchsploit); scheduling.
-- **v3:** correlation/prioritization across adapters; the marketing website;
-  optional local-AI remediation summaries.
+- **v2 (in progress):** more detection adapters — testssl.sh ✓, Nikto ✓, then
+  OpenVAS/Greenbone, ZAP; scheduling.
+- **v3:** correlation/prioritization across adapters ✓ (`core/correlate.py`,
+  `cosentinel risks`); next: the marketing website; optional local-AI
+  remediation summaries.
 - **v4 (gated):** exploitation adapters (Metasploit, …) strictly behind the
   `exploit` tier and `lab`-only targets.
 

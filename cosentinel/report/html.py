@@ -59,6 +59,12 @@ tr:last-child td{border-bottom:none}
 .refs{font-size:12px}
 footer{margin-top:34px;color:var(--muted);font-size:12.5px;text-align:center}
 .empty{padding:22px 18px;color:var(--muted)}
+.risks{padding:14px 18px;border-bottom:1px solid var(--border);background:#fcfdf3}
+.risks h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.risks ol{margin:0;padding:0;list-style:none}
+.risks li{display:flex;gap:10px;align-items:baseline;padding:4px 0}
+.risks .k{font-weight:600}
+.risks .r{color:var(--muted);font-size:13px}
 """
 
 
@@ -81,6 +87,17 @@ def _row(f: Finding) -> str:
     )
 
 
+def _risks_block(risks: list) -> str:
+    if not risks:
+        return ""
+    items = "".join(
+        f'<li>{_sev_badge(r.severity)} <span class="k">{html.escape(r.key)}</span>'
+        f'<span class="r">· {html.escape(r.rationale)}</span></li>'
+        for r in risks[:10]
+    )
+    return f'<div class="risks"><h3>Prioritized risks</h3><ol>{items}</ol></div>'
+
+
 def _group_block(meta: dict) -> str:
     findings: list[Finding] = sorted(
         meta["findings"], key=lambda f: int(f.severity), reverse=True
@@ -93,12 +110,13 @@ def _group_block(meta: dict) -> str:
     )
     if not findings:
         return f'<section class="group">{head}<div class="empty">No findings.</div></section>'
+    risks_html = _risks_block(meta.get("risks") or [])
     rows = "".join(_row(f) for f in findings)
     table = (
         "<table><thead><tr><th>Severity</th><th>Source</th>"
         "<th>Finding</th></tr></thead><tbody>" + rows + "</tbody></table>"
     )
-    return f'<section class="group">{head}{table}</section>'
+    return f'<section class="group">{head}{risks_html}{table}</section>'
 
 
 def render_report(groups: list[dict], *, logo_svg: str = "", title: str = "Cosentinel report") -> str:

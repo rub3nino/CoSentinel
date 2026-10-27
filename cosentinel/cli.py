@@ -19,6 +19,7 @@ from pathlib import Path
 from . import __version__, adapters  # importing adapters registers them
 from .adapters.base import all_adapters
 from .config import init_project, load
+from .core.correlate import correlate
 from .core.engine import Engine
 from .core.findings import Severity
 from .core.profiles import BUILTIN_PROFILES, get_profile
@@ -163,18 +164,46 @@ def cmd_report(args: argparse.Namespace) -> int:
         return 1
     findings = store.findings(scan_id)
     meta = next((s for s in store.scans(args.target) if s["id"] == scan_id), {})
+    risks = [r for r in correlate(findings) if r.severity >= Severity.LOW or r.exposed]
     group = {
         "target": args.target,
         "profile": meta.get("profile", ""),
         "intensity": meta.get("intensity", ""),
         "scanned_at": meta.get("finished_at", "") or meta.get("started_at", ""),
         "findings": findings,
+        "risks": risks,
     }
     logo = _load_logo()
     html = render_report([group], logo_svg=logo, title=f"Cosentinel · {args.target}")
     out = Path(args.output or f"cosentinel-report-{args.target}.html")
     out.write_text(html, encoding="utf-8")
     _print(f"[green]Wrote[/green] {out}  ({len(findings)} findings)")
+    return 0
+
+
+def cmd_risks(args: argparse.Namespace) -> int:
+    cfg = load(args.config)
+    store = Store(cfg.db_path)
+    scan_id = store.latest_scan_id(args.target)
+    if scan_id is None:
+        _print(f"[red]No completed scan[/red] for {args.target!r}. Run a scan first.")
+        return 1
+    risks = [r for r in correlate(store.findings(scan_id))
+             if r.severity >= Severity.LOW or r.exposed]
+    if not risks:
+        _print("[dim]No prioritized risks (only informational findings).[/dim]")
+        return 0
+    if _console:
+        t = Table(title=f"Prioritized risks · {args.target}")
+        for col in ("#", "score", "severity", "asset", "sources", "why it matters"):
+            t.add_column(col, overflow="fold")
+        for i, r in enumerate(risks, 1):
+            t.add_row(str(i), str(r.score), _sev_markup(r.severity), r.key,
+                      ",".join(r.sources), r.rationale)
+        _console.print(t)
+    else:
+        for i, r in enumerate(risks, 1):
+            print(f"{i}\t{r.score}\t{r.severity.label}\t{r.key}\t{r.rationale}")
     return 0
 
 
@@ -235,6 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("target")
     s.add_argument("-o", "--output", help="output file")
     s.set_defaults(func=cmd_report)
+
+    s = sub.add_parser("risks", help="correlated, prioritized risks for a target")
+    s.add_argument("target")
+    s.set_defaults(func=cmd_risks)
 
     s = sub.add_parser("diff", help="what changed since the previous scan")
     s.add_argument("target")
