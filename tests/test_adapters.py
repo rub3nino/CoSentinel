@@ -150,6 +150,111 @@ def test_sqlmap_csrf_token_is_configurable(monkeypatch):
     assert not any(a.startswith("--csrf-token") for a in argv)
 
 
+# Time-based-only injection reported while the target was rate-limiting — the
+# exact false-positive trap from the real Coolify run.
+SQLMAP_TIMEBASED_RATELIMITED = """
+[09:05:04] [WARNING] target appears to be rate-limiting requests; sqlmap is backing off and throttling accordingly
+sqlmap identified the following injection point(s) with a total of 120 HTTP(s) requests:
+---
+Parameter: email (POST)
+    Type: time-based blind
+    Title: MySQL >= 5.0.12 AND time-based blind (query SLEEP)
+    Payload: email=x' AND SLEEP(5)-- -
+---
+back-end DBMS: MySQL >= 5.0.12
+"""
+# Same, but no throttling in sight: a time-based hit on a healthy target stands.
+SQLMAP_TIMEBASED_CLEAN = SQLMAP_TIMEBASED_RATELIMITED.replace(
+    "[09:05:04] [WARNING] target appears to be rate-limiting requests; "
+    "sqlmap is backing off and throttling accordingly\n", "")
+# A clean-timing re-run that confirms the param via a non-timing technique.
+SQLMAP_EMAIL_CONFIRMED = """
+sqlmap identified the following injection point(s) with a total of 50 HTTP(s) requests:
+---
+Parameter: email (POST)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause
+    Payload: email=x' AND 1=1-- -
+---
+back-end DBMS: MySQL >= 5.0.12
+"""
+SQLMAP_EMAIL_CLEARED = (
+    "[10:09:48] [WARNING] POST parameter 'email' does not seem to be injectable\n"
+    "[10:09:48] [ERROR] all tested parameters do not appear to be injectable.")
+
+
+class _StubRunner:
+    """Feeds canned sqlmap output per run() call, in order."""
+    def __init__(self, *outputs):
+        self._outputs = list(outputs)
+        self.calls = []
+
+    def which(self, tool):  # pragma: no cover - not used here
+        return True
+
+    def run(self, argv, timeout=None, sudo=False):
+        self.calls.append(argv)
+        out = self._outputs.pop(0)
+        return CommandResult(argv=argv, returncode=0, stdout=out, stderr="", duration=0.1)
+
+
+def test_sqlmap_time_based_under_rate_limit_is_downgraded():
+    from cosentinel.core.correlate import correlate
+    f = SqlmapAdapter().parse(
+        [_result(SQLMAP_TIMEBASED_RATELIMITED)], TARGET, Intensity.AGGRESSIVE)
+    vuln = [x for x in f if x.category is Category.VULNERABILITY]
+    assert len(vuln) == 1
+    # Not a HIGH confirmation — a MEDIUM suspicion.
+    assert vuln[0].severity is Severity.MEDIUM
+    assert "suspected" in vuln[0].title.lower()
+    assert vuln[0].raw["time_based_only"] and vuln[0].raw["rate_limited"]
+    assert vuln[0].raw["confidence"] == "low"
+    # And crucially it must NOT inflate the risk as "actively confirmed".
+    risk = correlate(vuln)[0]
+    assert not risk.actively_confirmed
+
+
+def test_sqlmap_time_based_without_rate_limit_stays_high():
+    f = SqlmapAdapter().parse(
+        [_result(SQLMAP_TIMEBASED_CLEAN)], TARGET, Intensity.AGGRESSIVE)
+    vuln = [x for x in f if x.category is Category.VULNERABILITY]
+    assert len(vuln) == 1 and vuln[0].severity is Severity.HIGH
+    assert "suspected" not in vuln[0].title.lower()
+
+
+def test_sqlmap_plan_applies_proactive_delay(monkeypatch):
+    monkeypatch.setenv("COSENTINEL_SQLMAP_DELAY", "2")
+    argv = SqlmapAdapter().plan(TARGET, Intensity.AGGRESSIVE)[0].argv
+    assert "--delay=2" in argv
+
+
+def test_sqlmap_autoverify_confirms_promotes_to_high():
+    runner = _StubRunner(SQLMAP_TIMEBASED_RATELIMITED, SQLMAP_EMAIL_CONFIRMED)
+    out = SqlmapAdapter().scan(runner, TARGET, Intensity.AGGRESSIVE)
+    assert len(runner.calls) == 2                         # re-ran to verify
+    assert "-p" in runner.calls[1] and "--delay=1" in runner.calls[1]
+    vuln = [f for f in out if f.category is Category.VULNERABILITY]
+    assert len(vuln) == 1 and vuln[0].severity is Severity.HIGH
+    assert "suspected" not in vuln[0].title.lower()
+
+
+def test_sqlmap_autoverify_clears_false_positive():
+    runner = _StubRunner(SQLMAP_TIMEBASED_RATELIMITED, SQLMAP_EMAIL_CLEARED)
+    out = SqlmapAdapter().scan(runner, TARGET, Intensity.AGGRESSIVE)
+    assert len(runner.calls) == 2
+    assert not [f for f in out if f.severity >= Severity.HIGH]
+    assert not [f for f in out if f.severity is Severity.MEDIUM]
+    assert any("not confirmed" in f.title.lower() for f in out)
+
+
+def test_sqlmap_autoverify_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("COSENTINEL_SQLMAP_AUTOVERIFY", "0")
+    runner = _StubRunner(SQLMAP_TIMEBASED_RATELIMITED)
+    out = SqlmapAdapter().scan(runner, TARGET, Intensity.AGGRESSIVE)
+    assert len(runner.calls) == 1                         # no re-run
+    assert [f for f in out if f.severity is Severity.MEDIUM]
+
+
 # -- zap ------------------------------------------------------------------
 ZAP_JSON = """{
   "site": [{

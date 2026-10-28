@@ -229,6 +229,14 @@ export COSENTINEL_SQLMAP_CSRF_URL=http://host/login       # optional: where to f
 For a form app, point the target's `url:` at the form page (e.g. `…/login`) so the fields
 actually get tested.
 
+**Time-based false positives under rate-limiting.** A *time-based* injection is inferred
+from response delay, so a target that rate-limits (HTTP 429 / WAF throttling) makes sqlmap
+see phantom `SLEEP` hits. Cosentinel detects the throttling and treats a parameter that is
+injectable *only* via time-based payloads as a **MEDIUM "suspected"** finding (never a
+confirmed HIGH), then automatically re-tests just that parameter with a delay to confirm or
+clear it. Tune it: `COSENTINEL_SQLMAP_DELAY=N` (seconds between requests, applied from the
+first pass too) and `COSENTINEL_SQLMAP_AUTOVERIFY=0` (skip the confirming re-run).
+
 **Running ZAP natively (for Tailscale / host-only targets).** ZAP's packaged
 `zap-full-scan.py` ships only in its Docker image, and a container can't reach a Tailscale
 IP. To scan such a target, install ZAP natively and point the adapter at the bundled shim,
