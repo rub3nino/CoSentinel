@@ -79,7 +79,19 @@ class Risk:
 
     @property
     def sources(self) -> list[str]:
+        """Every tool that touched this asset (including ones that only added
+        informational context) — shown for transparency."""
         return sorted({f.source for f in self.findings})
+
+    @property
+    def corroborating_sources(self) -> list[str]:
+        """Tools that found an *actual* problem here (severity >= LOW).
+
+        A tool that reported only INFO — "port open", "no TLS issues", "no
+        template matches", "could not reach" — did not corroborate anything, so
+        it must not inflate the "corroborated by N tools" signal (and reachability
+        is already credited separately via `exposed`)."""
+        return sorted({f.source for f in self.findings if f.severity >= Severity.LOW})
 
     @property
     def exposed(self) -> bool:
@@ -106,8 +118,8 @@ class Risk:
     def score(self) -> int:
         """Explainable priority score. Higher = more urgent."""
         s = int(self.severity) * 10          # the weakness itself dominates
-        if len(self.sources) >= 2:
-            s += 5                            # corroborated by multiple tools
+        if len(self.corroborating_sources) >= 2:
+            s += 5                            # multiple tools found a real problem
         if self.has_cve:
             s += 5                            # a public exploit path exists
         if self.exposed and self.severity >= Severity.MEDIUM:
@@ -125,8 +137,9 @@ class Risk:
             bits.append("reachable from the network AND weak")
         elif self.exposed:
             bits.append("reachable from the network")
-        if len(self.sources) >= 2:
-            bits.append(f"corroborated by {len(self.sources)} tools ({', '.join(self.sources)})")
+        corr = self.corroborating_sources
+        if len(corr) >= 2:
+            bits.append(f"corroborated by {len(corr)} tools ({', '.join(corr)})")
         if self.has_cve:
             bits.append("known CVE")
         return "; ".join(bits) or "single-source finding"

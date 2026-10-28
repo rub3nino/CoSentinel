@@ -29,9 +29,13 @@ def test_ssh_weakness_and_open_port_reinforce_each_other():
     assert top.key == "port 22"
     assert set(top.sources) == {"lynis", "nmap"}
     assert top.exposed is True and top.severity is Severity.MEDIUM
-    # reachable AND weak (+8) and corroborated by 2 tools (+5) on top of MEDIUM(20)
-    assert top.score == 20 + 5 + 8
+    # nmap only reported the port OPEN (INFO), so it doesn't "corroborate" the
+    # weakness — that reachability is already credited as "reachable AND weak"
+    # (+8). Only lynis found an actual problem, so there's no multi-tool bonus.
+    assert top.corroborating_sources == ["lynis"]
+    assert top.score == 20 + 8
     assert "reachable from the network AND weak" in top.rationale
+    assert "corroborated by" not in top.rationale
     # The lone firewall suggestion is a separate, lower-ranked risk.
     assert risks[-1].key == "host hardening"
 
@@ -58,8 +62,42 @@ def test_active_sqli_on_open_web_port_tops_the_list():
     assert r.key == "port 443"
     assert r.actively_confirmed and r.exposed
     assert "actively confirmed exploitable" in r.rationale
-    # HIGH(30) + 2 tools(5) + reachable&weak(8) + actively confirmed(10)
-    assert r.score == 30 + 5 + 8 + 10
+    # Only sqlmap found a real problem (nmap just saw the port open), so no
+    # multi-tool bonus: HIGH(30) + reachable&weak(8) + actively confirmed(10).
+    assert r.corroborating_sources == ["sqlmap"]
+    assert r.score == 30 + 8 + 10
+    assert "corroborated by" not in r.rationale
+
+
+def test_info_only_sources_do_not_corroborate():
+    # The real Coolify case: one real finding (zap MEDIUM) plus a crowd of tools
+    # that found nothing (nmap open-port, nuclei no-match, testssl no-issues,
+    # sqlmap couldn't-reach). The rationale must not claim "corroborated by 5".
+    findings = [
+        F("zap", Severity.MEDIUM, Category.WEB, "CSP header not set", "http://h:8000"),
+        F("nmap", Severity.INFO, Category.NETWORK, "Open port 8000/tcp", "8000/tcp"),
+        F("nuclei", Severity.INFO, Category.INFO, "no template matches", "http://h:8000"),
+        F("testssl", Severity.INFO, Category.INFO, "no TLS issues", "http://h:8000"),
+        F("sqlmap", Severity.INFO, Category.INFO, "could not reach", "http://h:8000"),
+    ]
+    r = correlate(findings)[0]
+    assert r.key == "port 8000"
+    assert r.corroborating_sources == ["zap"]
+    assert "corroborated by" not in r.rationale
+    # No phantom +5: MEDIUM(20) + reachable&weak(8), nothing for the INFO crowd.
+    assert r.score == 20 + 8
+
+
+def test_two_real_findings_do_corroborate():
+    findings = [
+        F("zap", Severity.MEDIUM, Category.WEB, "CSP header not set", "http://h:8000"),
+        F("nikto", Severity.LOW, Category.WEB, "missing X-Content-Type-Options", "http://h:8000"),
+        F("nmap", Severity.INFO, Category.NETWORK, "Open port 8000/tcp", "8000/tcp"),
+    ]
+    r = correlate(findings)[0]
+    assert r.corroborating_sources == ["nikto", "zap"]
+    assert "corroborated by 2 tools (nikto, zap)" in r.rationale
+    assert r.score == 20 + 5 + 8          # MEDIUM + corroboration + reachable&weak
 
 
 def test_exposed_medium_outranks_isolated_low():
